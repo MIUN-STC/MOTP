@@ -43,7 +43,7 @@ void draw_kp (cv::Mat &img, std::vector <cv::KeyPoint> const & kp)
 		float d = kp [i].size;
 		snprintf (text, 10, "%u", i);
 		//cv::circle (img, p, d, cv::Scalar (255, 0, 255), 0.5);
-		//cv::drawMarker (img, p,  cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 100, 1);
+		cv::drawMarker (img, p,  cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 20, 1);
 		//cv::putText (img, text, p + cv::Point2f (-10.0f, -10.0f), CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (255, 0, 255), 1);
 		//TRACE_F ("%i %f %f", i, p.x, p.y);
 	}
@@ -73,10 +73,10 @@ void draw_pmodel
 		float r = m->sr0 + u [0] * m->sr1;
 		//float r = m->sr0;
 		//cv::circle      (img, p0, MIN (r, 10000.0f), cv::Scalar (60, 80, 234), 1);
-		cv::drawMarker  (img, p0, cv::Scalar (0, 0, 255), 1, 10, 1);
+		cv::drawMarker  (img, p0, cv::Scalar (0, 255, 255), 1, 10, 1);
 		//cv::putText     (img, text, p0, CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (50, 100, 255), 1);
-		cv::arrowedLine (img, p0, p0+p1*20.0f, cv::Scalar (0, 0, 255), 1, 8, 0, 0.1);
-		cv::arrowedLine (img, p0, p0+p2*100.0f, cv::Scalar (0, 255, 0), 1, 8, 0, 0.1);
+		cv::arrowedLine (img, p0, p0+p1*10.0f, cv::Scalar (0, 0, 255), 1, 8, 0, 0.1);
+		cv::arrowedLine (img, p0, p0+p2*20.0f, cv::Scalar (0, 255, 0), 1, 8, 0, 0.1);
 	}
 }
 
@@ -90,7 +90,7 @@ void pmodel_init (struct pmodel * m)
 	vu32_set1 (m->cap, m->u, UINT32_MAX);
 	//vu32_set1 (m->cap, m->persistence, UINT32_MAX);
 	m->sr0 = 15.0f;
-	m->sr1 = 20.0f;
+	m->sr1 = 15.0f;
 }
 
 
@@ -188,24 +188,20 @@ void pmodel_lockon (struct pmodel * m, std::vector <cv::KeyPoint> const & kp)
 		uint32_t * u = m->u + imin * 1;
 		if (u [0] < 10)
 		{
-			x0 [0] = 0.9f * x0 [0] + 0.1f * z0 [0];
-			x0 [1] = 0.9f * x0 [1] + 0.1f * z0 [1];
-			//x0 [0] = z0 [0];
-			//x0 [1] = z0 [1];
-			x2 [0] = dmin [0] * 0.1f * (1.0 / u [0]);
-			x2 [1] = dmin [1] * 0.1f * (1.0 / u [0]);
-			u [0] = 0;
+			vf32_weight_ab (2, x0, x0, z0, 0.8f);
+			//x0 [0] = 0.8f * x0 [0] + 0.2f * z0 [0];
+			//x0 [1] = 0.8f * x0 [1] + 0.2f * z0 [1];
+			float mass = 14.0f;
+			float k = (1.0f / mass) * (1.0f / u [0]);
+			v2f32_mus (x2, dmin, k);
 		}
 		else
 		{
-			x0 [0] = z0 [0];
-			x0 [1] = z0 [1];
-			x1 [0] = 0.0f;
-			x1 [1] = 0.0f;
-			x2 [0] = 0.0f;
-			x2 [1] = 0.0f;
-			u [0] = 0;
+			vf32_cpy (2, x0, z0);
+			vf32_set1 (2, x1, 0.0f);
+			vf32_set1 (2, x2, 0.0f);
 		}
+		vu32_set1 (1, u, 0);
 		//TRACE_F ("%i %f %f", imin, x2 [0], x2 [1]);
 	}
 }
@@ -278,7 +274,7 @@ int main (int argc, char** argv)
 	
 	
 	struct pmodel pm;
-	pm.cap = 2;
+	pm.cap = 20;
 	pmodel_init (&pm);
 	v2f32_random_wh (pm.cap, pm.x0, f0.cols, f0.rows);
 	v2f32_random (pm.cap, pm.x2);
@@ -322,6 +318,8 @@ int main (int argc, char** argv)
 					break;
 					
 					case SDLK_SPACE:
+					flags ^= UPDATE_WORLD | UPDATE_TRACKER;
+					flags &= ~SEMIAUTO;
 					break;
 				}
 				break;
@@ -400,6 +398,7 @@ int main (int argc, char** argv)
 		
 		if (flags & SEMIAUTO) {flags &= ~(UPDATE_WORLD | UPDATE_TRACKER);}
 		
+		usleep (30000);
 	}
 	
 	return 0;
