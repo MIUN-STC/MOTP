@@ -42,9 +42,9 @@ void draw_kp (cv::Mat &img, std::vector <cv::KeyPoint> const & kp)
 		cv::Point2f p = kp [i].pt;
 		float d = kp [i].size;
 		snprintf (text, 10, "%u", i);
-		cv::circle (img, p, d, cv::Scalar (255, 0, 255), 0.5);
-		cv::drawMarker (img, p,  cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 100, 1);
-		cv::putText (img, text, p + cv::Point2f (-10.0f, -10.0f), CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (255, 0, 255), 1);
+		//cv::circle (img, p, d, cv::Scalar (255, 0, 255), 0.5);
+		//cv::drawMarker (img, p,  cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 100, 1);
+		//cv::putText (img, text, p + cv::Point2f (-10.0f, -10.0f), CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (255, 0, 255), 1);
 		//TRACE_F ("%i %f %f", i, p.x, p.y);
 	}
 }
@@ -60,17 +60,23 @@ void draw_pmodel
 	uint32_t i = m->cap;
 	while (i--)
 	{
-		float * x = m->x0 + i * 2;
+		float * x0 = m->x0 + i * 2;
+		float * x1 = m->x1 + i * 2;
+		float * x2 = m->x2 + i * 2;
 		uint32_t * u = m->u + i * 1;
 		//TRACE_F ("%i %f %f", i, x [0], x [1]);
 		snprintf (text, 10, "%u %u", i, m->u [i]);
 		//snprintf (text, 10, "%u", i);
-		cv::Point2f p (x [0], x [1]);
+		cv::Point2f p0 (x0 [0], x0 [1]);
+		cv::Point2f p1 (x1 [0], x1 [1]);
+		cv::Point2f p2 (x2 [0], x2 [1]);
 		float r = m->sr0 + u [0] * m->sr1;
 		//float r = m->sr0;
-		cv::circle (img, p, MIN (r, 10000.0f), cv::Scalar (60, 80, 234), 1);
-		cv::drawMarker (img, p, cv::Scalar (255, 66, 11), 1, 100, 1);
-		cv::putText (img, text, p, CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (50, 100, 255), 1);
+		//cv::circle      (img, p0, MIN (r, 10000.0f), cv::Scalar (60, 80, 234), 1);
+		cv::drawMarker  (img, p0, cv::Scalar (0, 0, 255), 1, 10, 1);
+		//cv::putText     (img, text, p0, CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (50, 100, 255), 1);
+		cv::arrowedLine (img, p0, p0+p1*20.0f, cv::Scalar (0, 0, 255), 1, 8, 0, 0.1);
+		cv::arrowedLine (img, p0, p0+p2*100.0f, cv::Scalar (0, 255, 0), 1, 8, 0, 0.1);
 	}
 }
 
@@ -83,8 +89,8 @@ void pmodel_init (struct pmodel * m)
 	m->u  = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
 	vu32_set1 (m->cap, m->u, UINT32_MAX);
 	//vu32_set1 (m->cap, m->persistence, UINT32_MAX);
-	m->sr0 = 50.0f;
-	m->sr1 = 10.0f;
+	m->sr0 = 15.0f;
+	m->sr1 = 20.0f;
 }
 
 
@@ -101,8 +107,8 @@ void pmodel_update (struct pmodel * m)
 		if (u [0] != UINT32_MAX) {u [0] ++;}
 		
 		
-		//v2f32_add (x0, x0, x1);
-		//v2f32_add (x1, x1, x2);
+		v2f32_add (x1, x1, x2);
+		v2f32_add (x0, x0, x1);
 		
 		//TRACE_F ("%f %f", x2 [0], x2 [1]);
 	}
@@ -160,24 +166,47 @@ void pmodel_lockon (struct pmodel * m, std::vector <cv::KeyPoint> const & kp)
 			uint32_t * u = m->u + i * 1;
 			if (u [0] == 0) {continue;}
 			//TRACE_F ("%f %f", z0 [0], z0 [1]);
-			v2f32_sub (dmin, x0, z0);
-			float l = v2f32_norm2 (dmin);
+			float d [2];
+			v2f32_sub (d, z0, x0);
+			float l = v2f32_norm2 (d);
 			float r = m->sr0 + u [0] * m->sr1;
 			//float r = m->sr0;
 			//TRACE_F ("%i %i %f %f", i, j, z0 [0], x0 [0]);
-			if (l > (r*r)) {continue;}
+			if (l > (r*r) && u [0] < 10) {continue;}
 			if (l > lmin) {continue;}
 			imin = i;
 			lmin = l;
+			dmin [0] = d [0];
+			dmin [1] = d [1];
 		}
 		if (imin > m->cap) {continue;}
 		//TRACE_F ("%i", j);
 		//TRACE_F ("%i %i %f", imin, j, lmin);
 		float * x0 = m->x0 + imin * 2;
+		float * x1 = m->x1 + imin * 2;
+		float * x2 = m->x2 + imin * 2;
 		uint32_t * u = m->u + imin * 1;
-		x0 [0] = z0 [0];
-		x0 [1] = z0 [1];
-		u [0] = 0;
+		if (u [0] < 10)
+		{
+			x0 [0] = 0.9f * x0 [0] + 0.1f * z0 [0];
+			x0 [1] = 0.9f * x0 [1] + 0.1f * z0 [1];
+			//x0 [0] = z0 [0];
+			//x0 [1] = z0 [1];
+			x2 [0] = dmin [0] * 0.1f * (1.0 / u [0]);
+			x2 [1] = dmin [1] * 0.1f * (1.0 / u [0]);
+			u [0] = 0;
+		}
+		else
+		{
+			x0 [0] = z0 [0];
+			x0 [1] = z0 [1];
+			x1 [0] = 0.0f;
+			x1 [1] = 0.0f;
+			x2 [0] = 0.0f;
+			x2 [1] = 0.0f;
+			u [0] = 0;
+		}
+		//TRACE_F ("%i %f %f", imin, x2 [0], x2 [1]);
 	}
 }
 
@@ -249,7 +278,7 @@ int main (int argc, char** argv)
 	
 	
 	struct pmodel pm;
-	pm.cap = 4;
+	pm.cap = 2;
 	pmodel_init (&pm);
 	v2f32_random_wh (pm.cap, pm.x0, f0.cols, f0.rows);
 	v2f32_random (pm.cap, pm.x2);
@@ -346,8 +375,9 @@ int main (int argc, char** argv)
 			bgfs->apply (f1, mask);
 			cv::blur (mask, mask, cv::Size (3, 3));
 			blobber->detect (mask, kp);
-			//f0.copyTo (f1);
+			f0.copyTo (f1);
 		}
+		
 
 		if (flags & UPDATE_TRACKER)
 		{
@@ -365,7 +395,7 @@ int main (int argc, char** argv)
 			SDL_RenderClear (renderer);
 			SDL_RenderCopy (renderer, texture, NULL, NULL);
 			SDL_RenderPresent (renderer);	
-			f1.setTo (0);
+			//f1.setTo (0);
 		}
 		
 		if (flags & SEMIAUTO) {flags &= ~(UPDATE_WORLD | UPDATE_TRACKER);}
