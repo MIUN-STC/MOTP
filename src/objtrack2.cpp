@@ -35,13 +35,16 @@ struct pmodel
 
 void draw_kp (cv::Mat &img, std::vector <cv::KeyPoint> const & kp)
 {
+	char text [10];
 	uint32_t i = kp.size ();
 	while (i--)
 	{
 		cv::Point2f p = kp [i].pt;
 		float d = kp [i].size;
+		snprintf (text, 10, "%u", i);
 		cv::circle (img, p, d, cv::Scalar (255, 0, 255), 0.5);
 		cv::drawMarker (img, p,  cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 100, 1);
+		cv::putText (img, text, p + cv::Point2f (-10.0f, -10.0f), CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (255, 0, 255), 1);
 		//TRACE_F ("%i %f %f", i, p.x, p.y);
 	}
 }
@@ -53,16 +56,18 @@ void draw_pmodel
 	struct pmodel * m
 )
 {
-	char text [100];
+	char text [10];
 	uint32_t i = m->cap;
 	while (i--)
 	{
 		float * x = m->x0 + i * 2;
 		uint32_t * u = m->u + i * 1;
-		//snprintf (buf, 10, "%u %u", i, m->p [i]);
-		snprintf (text, 10, "%u", i);
+		//TRACE_F ("%i %f %f", i, x [0], x [1]);
+		snprintf (text, 10, "%u %u", i, m->u [i]);
+		//snprintf (text, 10, "%u", i);
 		cv::Point2f p (x [0], x [1]);
 		float r = m->sr0 + u [0] * m->sr1;
+		//float r = m->sr0;
 		cv::circle (img, p, MIN (r, 10000.0f), cv::Scalar (60, 80, 234), 1);
 		cv::drawMarker (img, p, cv::Scalar (255, 66, 11), 1, 100, 1);
 		cv::putText (img, text, p, CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (50, 100, 255), 1);
@@ -91,9 +96,13 @@ void pmodel_update (struct pmodel * m)
 		float * x0 = m->x0 + i*2;
 		float * x1 = m->x1 + i*2;
 		float * x2 = m->x2 + i*2;
+		uint32_t * u = m->u + i*1;
 		
-		v2f32_add (x0, x0, x1);
-		v2f32_add (x1, x1, x2);
+		if (u [0] != UINT32_MAX) {u [0] ++;}
+		
+		
+		//v2f32_add (x0, x0, x1);
+		//v2f32_add (x1, x1, x2);
 		
 		//TRACE_F ("%f %f", x2 [0], x2 [1]);
 	}
@@ -135,6 +144,8 @@ void pmodel_lockon_simple1 (struct pmodel * m, std::vector <cv::KeyPoint> const 
 
 void pmodel_lockon (struct pmodel * m, std::vector <cv::KeyPoint> const & kp)
 {
+	//TRACE_F ("%f", m->x0 [0]);
+	
 	uint32_t j = kp.size ();
 	while (j--)
 	{
@@ -146,44 +157,29 @@ void pmodel_lockon (struct pmodel * m, std::vector <cv::KeyPoint> const & kp)
 		while (i--)
 		{
 			float * x0 = m->x0 + i * 2;
-			float * x1 = m->x1 + i * 2;
-			float * x2 = m->x2 + i * 2;
 			uint32_t * u = m->u + i * 1;
+			if (u [0] == 0) {continue;}
 			//TRACE_F ("%f %f", z0 [0], z0 [1]);
 			v2f32_sub (dmin, x0, z0);
 			float l = v2f32_norm2 (dmin);
 			float r = m->sr0 + u [0] * m->sr1;
 			//float r = m->sr0;
+			//TRACE_F ("%i %i %f %f", i, j, z0 [0], x0 [0]);
 			if (l > (r*r)) {continue;}
-			if (l < lmin)
-			{
-				imin = i;
-			}
+			if (l > lmin) {continue;}
+			imin = i;
+			lmin = l;
 		}
-		TRACE_F ("%i", imin);
 		if (imin > m->cap) {continue;}
+		//TRACE_F ("%i", j);
+		//TRACE_F ("%i %i %f", imin, j, lmin);
 		float * x0 = m->x0 + imin * 2;
-		float * x1 = m->x1 + imin * 2;
-		float * x2 = m->x2 + imin * 2;
 		uint32_t * u = m->u + imin * 1;
 		x0 [0] = z0 [0];
 		x0 [1] = z0 [1];
 		u [0] = 0;
-		
-			
-		//if (m->u [imin] > 10)
-		{
-			//m->u [imin] = 0;
-		}
-		//else
-		{
-		}
-		
-		
-		//float d = v2f32_dist2 (x0);
 	}
 }
-
 
 
 
@@ -253,9 +249,9 @@ int main (int argc, char** argv)
 	
 	
 	struct pmodel pm;
-	pm.cap = 10;
+	pm.cap = 4;
 	pmodel_init (&pm);
-	v2f32_random_wh (pm.cap, pm.x0, f0.rows, f0.cols);
+	v2f32_random_wh (pm.cap, pm.x0, f0.cols, f0.rows);
 	v2f32_random (pm.cap, pm.x2);
 	
 	
@@ -280,7 +276,15 @@ int main (int argc, char** argv)
 					flags ^= PAUSE;
 					break;
 					
-					case SDLK_k:
+					case SDLK_u:
+					flags ^= UPDATE_TRACKER;
+					flags |= SEMIAUTO;
+					break;
+					
+					case SDLK_r:
+					kp.resize (0);
+					flags ^= UPDATE_TRACKER;
+					flags |= SEMIAUTO;
 					break;
 					
 					case SDLK_RIGHT:
@@ -299,17 +303,25 @@ int main (int argc, char** argv)
 					int w;
 					int h;
 					SDL_GetWindowSize (window, &w, &h);
-					//cv::Point2f p;
-					//p.x = (event.motion.x * f0.cols) / w;
-					//p.y = (event.motion.y * f0.rows) / h;
-					//kp.push_back (cv::KeyPoint (p, 0.0f));
-					kp.resize (1);
-					float * x = (float *) &kp [0].pt;
-					x [0] = (event.motion.x * f0.cols) / w;
-					x [1] = (event.motion.y * f0.rows) / h;
+					
+					if (event.button.button == SDL_BUTTON_LEFT && kp.size () > 0)
+					{
+						float * x = (float *) &kp [0].pt;
+						x [0] = (event.motion.x * f0.cols) / w;
+						x [1] = (event.motion.y * f0.rows) / h;
+					}
+					
+					if (event.button.button == SDL_BUTTON_RIGHT)
+					{
+						cv::Point2f p;
+						p.x = (event.motion.x * f0.cols) / w;
+						p.y = (event.motion.y * f0.rows) / h;
+						kp.push_back (cv::KeyPoint (p, 0.0f));
+					}	
+		
 					flags ^= UPDATE_TRACKER;
 					flags |= SEMIAUTO;
-					TRACE_F ("%i", kp.size ());
+					//TRACE_F ("%i", kp.size ());
 				}
 
 				break;
@@ -325,10 +337,6 @@ int main (int argc, char** argv)
 		if (flags & PAUSE) {continue;}
 	
 		
-		draw_kp (f1, kp);
-		draw_pmodel (f1, &pm);
-	
-		
 		if (flags & UPDATE_WORLD)
 		{
 			flags |= cap.read (f0) ? 0 : QUIT;
@@ -340,25 +348,28 @@ int main (int argc, char** argv)
 			blobber->detect (mask, kp);
 			//f0.copyTo (f1);
 		}
-		
+
 		if (flags & UPDATE_TRACKER)
 		{
+			pmodel_update (&pm);
 			pmodel_lockon (&pm, kp);
-			//pmodel_update (&pm);
 		}
 		
 		
+		
+		//if (flags & (UPDATE_TRACKER | UPDATE_WORLD))
+		{
+			draw_kp (f1, kp);
+			draw_pmodel (f1, &pm);
+			SDLCV_CopyTexture (texture, f1);
+			SDL_RenderClear (renderer);
+			SDL_RenderCopy (renderer, texture, NULL, NULL);
+			SDL_RenderPresent (renderer);	
+			f1.setTo (0);
+		}
+		
 		if (flags & SEMIAUTO) {flags &= ~(UPDATE_WORLD | UPDATE_TRACKER);}
 		
-		
-
-		
-		
-		SDLCV_CopyTexture (texture, f1);
-		f1.setTo (0);
-		SDL_RenderClear (renderer);
-		SDL_RenderCopy (renderer, texture, NULL, NULL);
-		SDL_RenderPresent (renderer);
 	}
 	
 	return 0;
