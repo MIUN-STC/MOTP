@@ -199,7 +199,8 @@ void pmodel_lockon (struct pmodel * m, std::vector <cv::KeyPoint> const & kp)
 		vf32_cpy (2, d, dmin);
 		if (u [0] < 10)
 		{
-			vf32_weight_ab (2, x0, x0, z0, 0.8f);
+			//vf32_weight_ab (2, x0, x0, z0, 0.8f);
+			vf32_weight_ab (2, x0, x0, z0, 1.0f / (u [0]));
 			//vf32_weight_ab (2, x1, x1, dmin, 1.0f);
 			float mass = 17.0f;
 			ASSERT (u [0] > 0);
