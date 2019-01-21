@@ -5,7 +5,7 @@ Example on how to track objects
 1. **Only one tracker per trail.**<br>
 There is big chance a trail will consume many tracker if otherwise. There is limited supply of trackers. 
 2. **A tracker has a mass and changes its force direction towards a trail.**<br>
-A trail is not necessarily the target the tracker is tracking. The tracker will be less distracted by false trails by keeping its momentum.
+A trail is not necessarily from target the tracker is tracking. The tracker will be less distracted by false trails by keeping its momentum.
 3. **A tracker can only track a trail within a search radius.**<br>
 A object that has recently been tracked can not go very far away from the observed position.
 4. **A tracker tracks the most similar trail based on which trail characteristics the tracker is tracking.**<br>
