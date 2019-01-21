@@ -3,7 +3,7 @@ Example on how to track objects
 
 ### Strategy
 1. **Only one tracker per trail.**<br>
-There is big chance the a trail will consume many tracker if otherwise. There is limited supply of trackers. 
+There is big chance a trail will consume many tracker if otherwise. There is limited supply of trackers. 
 2. **A tracker has a mass and changes its force direction towards a trail.**<br>
 A trail is not necessarily the target the tracker is tracking. The tracker will be less distracted by false trails by keeping its momentum.
 3. **A tracker can only track a trail within a search radius.**<br>
