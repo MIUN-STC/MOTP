@@ -23,13 +23,17 @@
 
 struct pmodel
 {
-	uint32_t cap;
-	float * x0; //Pos
-	float * x1; //Vel
-	float * x2; //Acc
-	uint32_t * u;
-	float sr0;
-	float sr1;
+	uint32_t cap; //Capacity
+	float * x0; //Position
+	float * x1; //Velocity
+	float * x2; //Acceleration
+	uint32_t * u; //Number of untracked frames.
+	uint32_t * t; //Number of tracked frames.
+	
+	float sr0; //Search radius start.
+	float sr1; //Search radius growth rate.
+	
+	float * d; //TrackerDetected vector.
 };
 
 
@@ -44,6 +48,7 @@ void draw_kp (cv::Mat &img, std::vector <cv::KeyPoint> const & kp)
 		snprintf (text, 10, "%u", i);
 		//cv::circle (img, p, d, cv::Scalar (255, 0, 255), 0.5);
 		cv::drawMarker (img, p,  cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 20, 1);
+		//cv::putText (img, text, p + cv::Point2f (-10.0f, -10.0f), CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (255, 0, 255), 1);
 		//cv::putText (img, text, p + cv::Point2f (-10.0f, -10.0f), CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (255, 0, 255), 1);
 		//TRACE_F ("%i %f %f", i, p.x, p.y);
 	}
@@ -63,20 +68,23 @@ void draw_pmodel
 		float * x0 = m->x0 + i * 2;
 		float * x1 = m->x1 + i * 2;
 		float * x2 = m->x2 + i * 2;
+		float * d = m->d + i * 2;
 		uint32_t * u = m->u + i * 1;
 		//TRACE_F ("%i %f %f", i, x [0], x [1]);
-		snprintf (text, 10, "%u %u", i, m->u [i]);
-		//snprintf (text, 10, "%u", i);
+		//snprintf (text, 10, "%u %u", i, m->u [i]);
+		snprintf (text, 10, "%u", i);
 		cv::Point2f p0 (x0 [0], x0 [1]);
 		cv::Point2f p1 (x1 [0], x1 [1]);
 		cv::Point2f p2 (x2 [0], x2 [1]);
+		cv::Point2f pd (d [0], d [1]);
 		float r = m->sr0 + u [0] * m->sr1;
 		//float r = m->sr0;
-		//cv::circle      (img, p0, MIN (r, 10000.0f), cv::Scalar (60, 80, 234), 1);
+		cv::circle      (img, p0, MIN (r, 10000.0f), cv::Scalar (60, 80, 234), 1);
 		cv::drawMarker  (img, p0, cv::Scalar (0, 255, 255), 1, 10, 1);
-		//cv::putText     (img, text, p0, CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (50, 100, 255), 1);
+		cv::putText     (img, text, p0, CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (50, 100, 255), 1);
 		cv::arrowedLine (img, p0, p0+p1*10.0f, cv::Scalar (0, 0, 255), 1, 8, 0, 0.1);
-		cv::arrowedLine (img, p0, p0+p2*20.0f, cv::Scalar (0, 255, 0), 1, 8, 0, 0.1);
+		cv::arrowedLine (img, p0, p0+p2*50.0f, cv::Scalar (0, 255, 0), 1, 8, 0, 0.1);
+		//cv::line (img, p0, p0+pd, cv::Scalar (0, 255, 0), 1, 8, 0);
 	}
 }
 
@@ -86,11 +94,12 @@ void pmodel_init (struct pmodel * m)
 	m->x0 = (float *) calloc (m->cap, sizeof (float) * 2);
 	m->x1 = (float *) calloc (m->cap, sizeof (float) * 2);
 	m->x2 = (float *) calloc (m->cap, sizeof (float) * 2);
+	m->d  = (float *) calloc (m->cap, sizeof (float) * 2);
 	m->u  = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
 	vu32_set1 (m->cap, m->u, UINT32_MAX);
 	//vu32_set1 (m->cap, m->persistence, UINT32_MAX);
-	m->sr0 = 15.0f;
-	m->sr1 = 15.0f;
+	m->sr0 = 0.0f;
+	m->sr1 = 20.0f;
 }
 
 
@@ -182,18 +191,21 @@ void pmodel_lockon (struct pmodel * m, std::vector <cv::KeyPoint> const & kp)
 		if (imin > m->cap) {continue;}
 		//TRACE_F ("%i", j);
 		//TRACE_F ("%i %i %f", imin, j, lmin);
-		float * x0 = m->x0 + imin * 2;
-		float * x1 = m->x1 + imin * 2;
-		float * x2 = m->x2 + imin * 2;
-		uint32_t * u = m->u + imin * 1;
+		float *   x0 = m->x0 + imin * 2;
+		float *   x1 = m->x1 + imin * 2;
+		float *   x2 = m->x2 + imin * 2;
+		float *    d = m->d  + imin * 2;
+		uint32_t * u = m->u  + imin * 1;
+		vf32_cpy (2, d, dmin);
 		if (u [0] < 10)
 		{
 			vf32_weight_ab (2, x0, x0, z0, 0.8f);
-			//x0 [0] = 0.8f * x0 [0] + 0.2f * z0 [0];
-			//x0 [1] = 0.8f * x0 [1] + 0.2f * z0 [1];
-			float mass = 14.0f;
+			//vf32_weight_ab (2, x1, x1, dmin, 1.0f);
+			float mass = 17.0f;
+			ASSERT (u [0] > 0);
 			float k = (1.0f / mass) * (1.0f / u [0]);
 			v2f32_mus (x2, dmin, k);
+			//vf32_weight_ab (2, x2, x2, dmin, 1.0f);
 		}
 		else
 		{
@@ -219,6 +231,12 @@ int main (int argc, char** argv)
 	if (opt.src == NULL) {return 0;}
 
 	cv::VideoCapture cap (opt.src);
+	
+	// Position of frame 
+	//cap.set (cv::CAP_PROP_POS_FRAMES, (2*60*60+35*60 +10)*20);
+	//cap.set (cv::CAP_PROP_POS_FRAMES, (5*60*60+48*60 + 30)*20);
+	//cap.set (cv::CAP_PROP_POS_FRAMES, (12*60*60+25*60)*20);
+	//Duration 5 or 10 minutes
 	double w = cap.get (cv::CAP_PROP_FRAME_WIDTH);
 	double h = cap.get (cv::CAP_PROP_FRAME_HEIGHT);
 	
@@ -274,7 +292,7 @@ int main (int argc, char** argv)
 	
 	
 	struct pmodel pm;
-	pm.cap = 20;
+	pm.cap = 30;
 	pmodel_init (&pm);
 	v2f32_random_wh (pm.cap, pm.x0, f0.cols, f0.rows);
 	v2f32_random (pm.cap, pm.x2);
@@ -379,8 +397,8 @@ int main (int argc, char** argv)
 
 		if (flags & UPDATE_TRACKER)
 		{
-			pmodel_update (&pm);
 			pmodel_lockon (&pm, kp);
+			pmodel_update (&pm);
 		}
 		
 		
@@ -398,7 +416,7 @@ int main (int argc, char** argv)
 		
 		if (flags & SEMIAUTO) {flags &= ~(UPDATE_WORLD | UPDATE_TRACKER);}
 		
-		usleep (30000);
+		usleep (50000);
 	}
 	
 	return 0;
