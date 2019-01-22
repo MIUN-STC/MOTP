@@ -23,5 +23,5 @@ The tracker does not know the position of the target so there is a chance that t
 <a href="https://www.codecogs.com/eqnedit.php?latex=\huge&space;r&space;=&space;r_0&space;&plus;&space;r_ku" target="_blank"><img src="https://latex.codecogs.com/gif.latex?\huge&space;r&space;=&space;r_0&space;&plus;&space;r_ku" title="\huge r = r_0 + r_ku" /></a>
 7. **A tracker decreses its search radius if there is a trail inside the search radius.**<br>
 The tracker knows the position of the target there is no need to search a where it is impossable for the target to appear.
-
+8. **A tracker ramps up it speed if the tracker has been far behind a target longer than normal.**
 
