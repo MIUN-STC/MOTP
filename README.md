@@ -5,7 +5,7 @@ Example on how to track objects
 1. **Only one tracker per trail.**<br>
 There is big chance a trail will consume many tracker if otherwise. There is limited supply of trackers. 
 2. **A tracker has a mass and changes its force direction towards a trail.**<br>
-A trail is not necessarily from target the tracker is tracking. The tracker will be less distracted by false trails by keeping its momentum.<br>
+A trail is not necessarily from a object the tracker is tracking. The tracker will be less distracted by false trails by keeping its momentum.<br>
 <a href="https://www.codecogs.com/eqnedit.php?latex=\LARGE&space;\ddot{x}&space;=&space;d&space;\frac{1}{m}&space;\frac{1}{u}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?\LARGE&space;\ddot{x}&space;=&space;d&space;\frac{1}{m}&space;\frac{1}{u}" title="\LARGE \ddot{x} = d \frac{1}{m} \frac{1}{u}" /></a>
 3. **A tracker can only track a trail within a search radius.**<br>
 A object that has recently been tracked can not go very far away from the observed position.<br>
@@ -23,5 +23,5 @@ The tracker does not know the position of the target so there is a chance that t
 <a href="https://www.codecogs.com/eqnedit.php?latex=\huge&space;r&space;=&space;r_0&space;&plus;&space;r_ku" target="_blank"><img src="https://latex.codecogs.com/gif.latex?\huge&space;r&space;=&space;r_0&space;&plus;&space;r_ku" title="\huge r = r_0 + r_ku" /></a>
 7. **A tracker decreses its search radius if there is a trail inside the search radius.**<br>
 The tracker knows the position of the target there is no need to search a where it is impossable for the target to appear.
-8. **A tracker ramps up it speed if the tracker has been far behind a target longer than normal.**
-
+8. **A tracker ramps up its force if the tracker has been too far behind a target longer than normal.**
+9. **A tracker will have a boost of force when it start to track a new object, then it will reduce if the tracker is confident enough**
