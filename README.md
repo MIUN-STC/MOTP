@@ -25,3 +25,5 @@ The tracker does not know the position of the target so there is a chance that t
 The tracker knows the position of the target there is no need to search a where it is impossable for the target to appear.
 8. **A tracker ramps up its force if the tracker has been too far behind a target longer than normal.**
 9. **A tracker will have a boost of force when it start to track a new object, then it will reduce if the tracker is confident enough**
+10. **A new tracker can not track within experienced trackers zone.**<br>
+The tracker has to get some experience first by tracking some place else.
