@@ -154,6 +154,21 @@ void pmodel_update (struct pmodel * m)
 }
 
 
+float pmodel_shortest (struct pmodel * m, float z [2])
+{
+	float lmin = FLT_MAX;
+	uint32_t i = m->cap;
+	while (i--)
+	{
+		float * a = m->x0 + i * 2;
+		float d [2];
+		v2f32_sub (d, a, z);
+		float l = v2f32_norm2 (d);
+		if (l < lmin) {lmin = l;}
+	}
+	return lmin;
+}
+
 
 void pmodel_lockon (struct pmodel * m, std::vector <cv::KeyPoint> const & kp)
 {
@@ -198,7 +213,7 @@ void pmodel_lockon (struct pmodel * m, std::vector <cv::KeyPoint> const & kp)
 			t [0] += 1;
 			if (lmin < (m->sr1*m->sr1)){e [0] = 0.0f;}
 		}
-		else
+		else if (pmodel_shortest (m, z0) > 40*40)
 		{
 			vf32_cpy (2, x0, z0);
 			vf32_set1 (2, x1, 0.0f);
@@ -225,7 +240,7 @@ int main (int argc, char** argv)
 	
 	// Position of frame 
 	//cap.set (cv::CAP_PROP_POS_FRAMES, (2*60*60+35*60 +10)*20);
-	cap.set (cv::CAP_PROP_POS_FRAMES, (5*60*60+48*60 + 30)*20);
+	//cap.set (cv::CAP_PROP_POS_FRAMES, (5*60*60+48*60 + 30)*20);
 	//cap.set (cv::CAP_PROP_POS_FRAMES, (12*60*60+25*60)*20);
 	//Duration 5 or 10 minutes
 	double w = cap.get (cv::CAP_PROP_FRAME_WIDTH);
