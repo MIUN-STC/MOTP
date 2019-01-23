@@ -18,24 +18,18 @@
 
 
 
-
-
+#define PM_TAKEN 0x0001
+#define PM_SEARCHR2_MAX (80.0f*80.0f)
+#define PM_SEARCHR2_RATE (30.0f*30.0f)
 
 struct pmodel
 {
 	uint32_t cap; //Capacity
 	float * x0; //Position
 	float * x1; //Velocity
-	
-	uint32_t * u; //Number of untracked frames.
-	uint32_t * t; //Number of tracked frames.
 	float * r;
-	
-	float sr0; //Search radius start.
-	float sr1; //Search radius growth rate.
-	
 	float * d; //TrackerDetected vector.
-	float * e;
+	uint32_t * t; //Number of tracked frames.
 };
 
 
@@ -47,12 +41,10 @@ void draw_kp (cv::Mat &img, std::vector <cv::KeyPoint> const & kp)
 	{
 		cv::Point2f p = kp [i].pt;
 		float d = kp [i].size;
-		snprintf (text, 10, "%u", i);
+		snprintf (text, 10, "%i", kp [i].class_id);
 		//cv::circle (img, p, d, cv::Scalar (255, 0, 255), 0.5);
 		cv::drawMarker (img, p,  cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 4, 1);
 		cv::putText (img, text, p + cv::Point2f (-10.0f, -10.0f), CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (255, 0, 255), 1);
-		//cv::putText (img, text, p + cv::Point2f (-10.0f, -10.0f), CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (255, 0, 255), 1);
-		//TRACE_F ("%i %f %f", i, p.x, p.y);
 	}
 }
 
@@ -63,26 +55,27 @@ void draw_pmodel
 	struct pmodel * m
 )
 {
-	char text [10];
+	char text [20];
 	uint32_t i = m->cap;
 	while (i--)
 	{
 		float * x0 = m->x0 + i * 2;
 		float * x1 = m->x1 + i * 2;
 		float * d = m->d + i * 2;
-		float * e = m->e + i * 1;
-		uint32_t * u = m->u + i * 1;
+		float * r = m->r + i * 1;
 		uint32_t * t = m->t + i * 1;
 		//TRACE_F ("%i %f %f", i, x [0], x [1]);
-		snprintf (text, 10, "%u %u", i, m->u [i]);
+		float r0 = MIN (sqrtf (r [0]), 100000.0f);
+		snprintf (text, 20, "%u", i);
 		//snprintf (text, 10, "%u %f", i, e [0]);
 		//snprintf (text, 10, "%u", i);
 		cv::Point2f p0 (x0 [0], x0 [1]);
 		cv::Point2f p1 (x1 [0], x1 [1]);
 		cv::Point2f pd (d [0], d [1]);
-		float r = m->sr0 + u [0] * m->sr1;
-		//TRACE_F ("%i %f %f", p0.x, p0.y, i);
-		cv::circle      (img, p0, MIN (r, 10000.0f), cv::Scalar (255, 100, 150), 1);
+		
+		//TRACE_F ("%i %f %f", i, r0, sqrtf (PM_MAX_SEARCHR2));
+		cv::circle      (img, p0, r0, cv::Scalar (255, 100, 150), 1);
+		cv::circle      (img, p0, sqrtf (PM_SEARCHR2_MAX), cv::Scalar (255, 150, 100), 1);
 		cv::drawMarker  (img, p0, cv::Scalar (0, 255, 255), 1, 10, 1);
 		cv::putText     (img, text, p0+cv::Point2f (5,5), CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (50, 100, 255), 1);
 		cv::arrowedLine (img, p0, p0+p1*10.0f, cv::Scalar (0, 0, 255), 1, 8, 0, 0.1);
@@ -92,39 +85,13 @@ void draw_pmodel
 }
 
 
-void draw_trace 
-(
-	cv::Mat &img,
-	struct pmodel * m
-)
-{
-	char text [10];
-	uint32_t i = m->cap;
-	while (i--)
-	{
-		float * x0 = m->x0 + i * 2;
-		float * x1 = m->x1 + i * 2;
-		float * d = m->d + i * 2;
-		float * e = m->e + i * 1;
-		uint32_t * u = m->u + i * 1;
-		uint32_t * t = m->t + i * 1;
-	}
-}
-
-
 void pmodel_init (struct pmodel * m)
 {
 	m->x0 = (float *) calloc (m->cap, sizeof (float) * 2);
 	m->x1 = (float *) calloc (m->cap, sizeof (float) * 2);
 	m->d  = (float *) calloc (m->cap, sizeof (float) * 2);
-	m->e  = (float *) calloc (m->cap, sizeof (float));
 	m->r  = (float *) calloc (m->cap, sizeof (float));
-	m->u  = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
 	m->t  = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
-	vu32_set1 (m->cap, m->u, UINT32_MAX);
-	//vu32_set1 (m->cap, m->persistence, UINT32_MAX);
-	m->sr0 = 0.0f;
-	m->sr1 = 20.0f;
 }
 
 
@@ -136,20 +103,17 @@ void pmodel_update (struct pmodel * m)
 		float * x0 = m->x0 + i*2;
 		float * x1 = m->x1 + i*2;
 		float * d = m->d + i*2;
-		float * e = m->e + i*1;
 		uint32_t * t = m->t + i*1;
-		uint32_t * u = m->u + i*1;
-		float mass = 22.0f;
-		//ASSERT (u [0] > 0);
+		float mass = 20.0f;
 		//ASSERT (t [0] > 0);
-		//float k = (1.0f / mass) * (1.0f / u [0]) + 0.0001f * sqrt (e [0]);
-		//float k = (1.0f / mass) * (1.0f / u [0]) + (1.0f / t [0]);
-		//float k = (1.0f / mass) * (1.0f / u [0]);
 		float k = (1.0f / mass);
 		float x2 [2];
 		v2f32_mus (x2, d, k);
 		v2f32_add (x1, x1, x2);
-		v2f32_add (x0, x0, x1);
+		
+		float x1mix [2];
+		vf32_weight_ab (2, x1mix, x1, d, 0.8f);
+		v2f32_add (x0, x0, x1mix);
 	}
 	//Slow down acc and vel.
 	vf32_mus (m->cap*2, m->x1, m->x1, 0.98f);
@@ -172,72 +136,53 @@ float pmodel_shortest (struct pmodel * m, float const z [2])
 }
 
 
-void pmodel_lockon (struct pmodel * m, std::vector <cv::KeyPoint> const & kp)
+void pmodel_lockon (struct pmodel * m, std::vector <cv::KeyPoint> & kp)
 {
-	vf32_set1 (m->cap * 2, m->d, 0.0f);
-	//vu32_add1max (m->cap, m->u, m->u, 1, UINT32_MAX);
-	uint32_t j = kp.size ();
-	while (j--)
+	uint32_t i = m->cap;
+	while (i--)
 	{
-		float dmin [2];
-		float lmin = FLT_MAX;
-		uint32_t imin = UINT32_MAX;
-		float * z0 = (float *) &kp [j].pt;
-		uint32_t i = m->cap;
-		while (i--)
-		{
-			float * x0 = m->x0 + i * 2;
-			uint32_t * u = m->u + i * 1;
-			
-			
-			
-			float d [2];
-			v2f32_sub (d, z0, x0);
-			float l = v2f32_norm2 (d);
-			float r = m->sr0 + u [0] * m->sr1;
-			if (l > (r*r) && u [0] < 10) {continue;}
-			if (l > lmin) {continue;}
-			imin = i;
-			lmin = l;
-			dmin [0] = d [0];
-			dmin [1] = d [1];
-		}
-		if (imin > m->cap) {continue;}
-		float *   x0 = m->x0 + imin * 2;
-		float *   x1 = m->x1 + imin * 2;
-		float *    d = m->d  + imin * 2;
-		float *    e = m->e  + imin * 1;
-		uint32_t * u = m->u  + imin * 1;
-		uint32_t * t = m->t  + imin * 1;
+		float    *     x0 = m->x0     + i * 2;
+		float    *     x1 = m->x1     + i * 2;
+		float    *      d = m->d      + i * 2;
+		float    *      r = m->r      + i * 1;
+		uint32_t *      t = m->t      + i * 1;
 		
-
-		
-		if (u [0] < 10)
+		uint32_t j = kp.size ();
+		if (r [0] > PM_SEARCHR2_MAX)
 		{
-			vf32_weight_ab (2, x0, x0, z0, 0.8f);
-			vf32_cpy (2, d, dmin);
-			e [0] += lmin;
-			t [0] += 1;
-			if (lmin < (m->sr1*m->sr1)){e [0] = 0.0f;}
-			vu32_add1min (1, u, u, -1, 0);
+			while (j--)
+			{
+				if (kp [j].class_id != -1) {continue;}
+				float * z0 = (float *) &kp [j].pt;
+				kp [j].class_id = i;
+				vf32_cpy (2, x0, z0);
+				vf32_set1 (2, x1, 0.0f);
+				vf32_set1 (1, r, 100.0f);
+			}
 		}
 		else
-		//else if (pmodel_shortest (m, z0) > 20*20)
 		{
-			vf32_cpy (2, x0, z0);
-			vf32_set1 (2, x1, 0.0f);
-			vf32_set1 (1, e, 0.0f);
-			vu32_set1 (1, t, 1);
-			vu32_set1 (1, u, 0);
+			uint32_t n = 0;
+			vf32_set1 (2, d, 0.0f);
+			while (j--)
+			{	
+				float * z0 = (float *) &kp [j].pt;
+				float zx0 [2];
+				v2f32_sub (zx0, z0, x0);
+				float l = v2f32_norm2 (zx0);
+				if (l < r [0] && l < PM_SEARCHR2_MAX)
+				{
+					n ++;
+					v2f32_add (d, d, zx0);
+					kp [j].class_id = i;
+				}
+			}
+			r [0] += PM_SEARCHR2_RATE;
+			if (n == 0) {continue;}
+			v2f32_mus (d, d, 1.0f / n);
+			r [0] = v2f32_norm2 (d) + 100.0f;
 		}
-		//vu32_set1 (1, u, 0);
-		
-		TRACE_F ("%i", u [0]);
 	}
-	
-	
-	
-	vu32_add1max (m->cap, m->u, m->u, 1, UINT32_MAX);
 }
 
 
@@ -315,7 +260,7 @@ int main (int argc, char** argv)
 	
 	
 	struct pmodel pm;
-	pm.cap = 1;
+	pm.cap = 2;
 	pmodel_init (&pm);
 	v2f32_random_wh (pm.cap, pm.x0, f0.cols, f0.rows);
 	
@@ -372,6 +317,7 @@ int main (int argc, char** argv)
 					
 					if (event.button.button == SDL_BUTTON_LEFT && kp.size () > 0)
 					{
+						kp [0].class_id =  -1;
 						float * x = (float *) &kp [0].pt;
 						x [0] = (event.motion.x * f0.cols) / w;
 						x [1] = (event.motion.y * f0.rows) / h;
@@ -418,22 +364,22 @@ int main (int argc, char** argv)
 
 		if (flags & UPDATE_TRACKER)
 		{
+			pmodel_lockon (&pm, kp);
 			pmodel_update (&pm);
+			draw_kp (f1, kp);
 			draw_pmodel (f1, &pm);
 			//draw_trace (f2, &pm);
-			pmodel_lockon (&pm, kp);
 		}
 		
 		
 		
-		//if (flags & (UPDATE_TRACKER | UPDATE_WORLD))
+		if (flags & (UPDATE_TRACKER | UPDATE_WORLD))
 		{
-			draw_kp (f1, kp);
 			SDLCV_CopyTexture (texture, f1);
 			SDL_RenderClear (renderer);
 			SDL_RenderCopy (renderer, texture, NULL, NULL);
 			SDL_RenderPresent (renderer);	
-			//f1.setTo (0);
+			f1.setTo (0);
 		}
 		
 		if (flags & SEMIAUTO) {flags &= ~(UPDATE_WORLD | UPDATE_TRACKER);}

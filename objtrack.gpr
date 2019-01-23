@@ -14,7 +14,7 @@ project Objtrack is
 	
 	Main_Files := 
 	(
-		"objtrack2.cpp"
+		"objtrack4.cpp"
 	);
 	
 	for Main use Main_Files;
