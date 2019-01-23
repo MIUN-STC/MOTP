@@ -66,7 +66,7 @@ void draw_pmodel
 		uint32_t * t = m->t + i * 1;
 		//TRACE_F ("%i %f %f", i, x [0], x [1]);
 		float r0 = MIN (sqrtf (r [0]), 100000.0f);
-		snprintf (text, 20, "%u", i);
+		snprintf (text, 20, "%u %u", i, t [0]);
 		//snprintf (text, 10, "%u %f", i, e [0]);
 		//snprintf (text, 10, "%u", i);
 		cv::Point2f p0 (x0 [0], x0 [1]);
@@ -105,8 +105,8 @@ void pmodel_update (struct pmodel * m)
 		float * d = m->d + i*2;
 		uint32_t * t = m->t + i*1;
 		float mass = 20.0f;
-		//ASSERT (t [0] > 0);
-		float k = (1.0f / mass);
+		ASSERT (t [0] > 0);
+		float k = (1.0f / mass) + (0.5f / t [0]);
 		float x2 [2];
 		v2f32_mus (x2, d, k);
 		v2f32_add (x1, x1, x2);
@@ -154,14 +154,18 @@ void pmodel_lockon (struct pmodel * m, std::vector <cv::KeyPoint> & kp)
 			{
 				if (kp [j].class_id != -1) {continue;}
 				float * z0 = (float *) &kp [j].pt;
+				if (pmodel_shortest (m, z0) < PM_SEARCHR2_MAX) {continue;}
+			
 				kp [j].class_id = i;
 				vf32_cpy (2, x0, z0);
 				vf32_set1 (2, x1, 0.0f);
 				vf32_set1 (1, r, 100.0f);
+				vu32_set1 (1, t, 1);
 			}
 		}
 		else
 		{
+			vu32_add1max (1, t, t, 1, UINT32_MAX);
 			uint32_t n = 0;
 			vf32_set1 (2, d, 0.0f);
 			while (j--)
