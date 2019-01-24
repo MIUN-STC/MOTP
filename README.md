@@ -1,5 +1,5 @@
-# objtrack
-Example on how to track objects
+# MOTP Multiple Object Tracker Particle
+
 
 ### Strategy
 1. **Only one tracker per trail.**<br>
