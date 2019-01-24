@@ -14,7 +14,7 @@
 #define SEMIAUTO          0x0010
 #define FORWARD           0x0020
 #define BACKWARD          0x0040
-#define UPDATE_DECTECTION 0x0100
+#define UPDATE_WORLD      0x0100
 #define UPDATE_TRACKER    0x0200
 #define UPDATE_FRAME      0x0400
 #define UPDATE_GRAPHICS   0x0800
