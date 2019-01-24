@@ -7,8 +7,8 @@ project Objtrack is
 	for Exec_Dir use "bin";
 	for Source_Dirs use 
 	(
-		"../csc",
-		"src"
+		"src",
+		"src/csc"
 	);
 	
 	

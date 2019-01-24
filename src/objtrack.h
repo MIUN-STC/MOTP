@@ -6,7 +6,7 @@
 #include <opencv2/features2d.hpp>
 #include <opencv2/core/utility.hpp>
 
-#include "debug.h"
+#include <csc/debug.h>
 
 
 #define QUIT              0x0001

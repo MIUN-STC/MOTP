@@ -1,0 +1,162 @@
+abstract project SDLGL is
+
+	type Target_type is ("Windows_NT", "UNIX");
+	Target : Target_type := external ("OS", "UNIX");
+
+
+	for Source_Files use ();
+
+	case Target is
+	
+	when "UNIX" =>
+		for Source_Dirs use ();
+		
+	when "Windows_NT" =>
+		for Source_Dirs use 
+		(
+			"C:/lib/SDL2-2.0.8/x86_64-w64-mingw32/include",
+			"C:/lib/glew-2.1.0/include"
+		);
+		
+	end case;
+
+
+	package Linker is
+		case Target is
+		
+		when "UNIX" =>
+			for Linker_Options use ("-lSDL2", "-lGL", "-lm");
+			
+		when "Windows_NT" =>
+			for Linker_Options use 
+			(
+				"-LC:/lib/SDL2-2.0.8/x86_64-w64-mingw32/lib",
+				"-lmingw32",
+				"-lSDL2main", 
+				"-lSDL2", 
+				"-mwindows",
+				"-Wl,--no-undefined", 
+				"-lm", 
+				"-ldinput8", 
+				"-ldxguid", 
+				"-ldxerr8", 
+				"-luser32", 
+				"-lgdi32", 
+				"-lwinmm", 
+				"-limm32", 
+				"-lole32", 
+				"-loleaut32", 
+				"-lshell32", 
+				"-lversion", 
+				"-luuid", 
+				"-static-libgcc",
+
+				"-LC:/lib/glew-2.1.0/lib/Release/x64",
+				"-lglew32s",
+				"-lopengl32",
+				"-lglu32",
+				
+				"-lm"
+			);
+			
+			--"-msse2", "-msse3", "-msse4", "-msse4.1"
+			
+			--for Driver use "C:/Program Files/mingw-w64/x86_64-7.3.0-posix-seh-rt_v5-rev0/mingw64/bin/gcc";
+			
+		end case;
+	end Linker;
+	
+	
+	package Compiler is
+	
+		--https://developers.redhat.com/blog/2018/03/21/compiler-and-linker-flags-gcc/
+		for Switches ("C") use 
+		(
+			"-std=gnu11", 
+			"-march=native",
+			"-fdiagnostics-color", 
+			
+			"-Wall", 
+			"-Werror",
+			"-Wextra", 
+			"-Wshadow",
+			"-Wpedantic",  
+			
+			"-Wduplicated-branches",
+			"-Wduplicated-cond",
+			"-Wlogical-op",
+			"-Wrestrict",
+			"-Wnull-dereference",
+			"-Wjump-misses-init",
+			"-Wdouble-promotion",
+			"-Wformat=2",
+			
+			"-Werror=format-security",
+			"-Werror=implicit-function-declaration",
+		
+			"-Wno-unused-function",
+			"-Wno-unused-parameter",
+			"-Wno-error=unused-function",
+			"-Wno-error=unused-but-set-variable",
+			"-Wno-error=unused-parameter",
+			"-Wno-error=unused-variable",
+			
+			--"-Wno-missing-braces",
+			--"-Wno-missing-field-initializers",
+			--"-Wno-variadic-macros",
+			
+			
+			"-D_FORTIFY_SOURCE=2",
+			
+			"-Wl,-z,defs",
+			"-pipe",
+			
+			""
+		);
+		
+		for Switches ("C++") use 
+		(
+			"-march=native",
+			"-fdiagnostics-color", 
+			
+			"-Wall", 
+			"-Werror",
+			"-Wextra", 
+			"-Wshadow",
+			"-Wpedantic",  
+			
+			"-Wduplicated-cond",
+			"-Wlogical-op",
+			"-Wrestrict",
+			"-Wnull-dereference",
+			"-Wdouble-promotion",
+			"-Wformat=2",
+			
+			"-Werror=format-security",
+			"-Werror=implicit-function-declaration",
+		
+			"-Wno-unused-function",
+			"-Wno-unused-parameter",
+			"-Wno-error=unused-function",
+			"-Wno-error=unused-but-set-variable",
+			"-Wno-error=unused-parameter",
+			"-Wno-error=unused-variable",
+			
+			--"-Wno-missing-braces",
+			--"-Wno-missing-field-initializers",
+			--"-Wno-variadic-macros",
+			
+			
+			"-D_FORTIFY_SOURCE=2",
+			
+			"-Wl,-z,defs",
+			"-pipe",
+			
+			""
+		);
+		
+		
+	end Compiler;
+	
+
+end SDLGL;
