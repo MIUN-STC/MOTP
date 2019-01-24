@@ -16,12 +16,12 @@
 #define MOTP_MERGE 90
 
 //The maximum search radius
-#define MOTP_SEARCHR2_MAX (80.0f*80.0f)
+#define MOTP_SEARCHR2_MAX (100.0f*100.0f)
 
 //The search radius growrate when no keypoints are found.
 #define MOTP_SEARCHR2_GROWRATE_OFFSET (5.0f*5.0f)
 #define MOTP_SEARCHR2_GROWRATE_TIMEBOOST (3000.0f)
-#define MOTP_SEARCHR2_GROWRATE_VELBOOST (10.0f)
+#define MOTP_SEARCHR2_GROWRATE_VELBOOST (20.0f)
 
 //The starting search radius for tracking a new object.
 #define MOTP_SEARCHR2_START (100.0f*100.0f)
@@ -41,8 +41,12 @@
 //Position correction and antiorbit constant. Range is 0 .. 1.
 //Higher means use more history velocity.
 //Lower means use more realtime positioning.
+//Setting this constant 1 can make the tracker oscillating or orbit around keypoints.
 #define MOTP_VELDELTA_MIX 0.8f
 
+
+//The rate tracker velocity slows down
+#define MOTP_VELREDUCE 0.95f
 
 
 
@@ -104,7 +108,7 @@ void motp_update (struct MOTP * m)
 		v2f32_add (x0, x0, x1mix);
 	}
 	//Slow down acc and vel.
-	vf32_mus (m->cap*2, m->x1, m->x1, 0.98f);
+	vf32_mus (m->cap*2, m->x1, m->x1, MOTP_VELREDUCE);
 }
 
 
