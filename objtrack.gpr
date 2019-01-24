@@ -1,4 +1,4 @@
-with "../csc/SDLGL.gpr";
+with "src/csc/SDLGL.gpr";
 
 project Objtrack is
 
