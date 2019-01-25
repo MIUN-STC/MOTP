@@ -50,6 +50,41 @@
 
 
 
+
+
+void motp_dist (float y [2], float x [2], uint32_t n, float z [])
+{
+	float dmin [2];
+	float lmin= FLT_MAX;
+	float ysum [2] = {0.0f, 0.0f};
+	uint32_t i = n;
+	while (i--)
+	{
+		//TRACE_F ("%f %f", d [0], d [1]);
+		float zx [2];
+		vf32_sub (2, zx, z, x);
+		float l = vf32_norm2 (2, zx);
+		if (l < lmin)
+		{
+			vf32_cpy (2, dmin, zx);
+			lmin = l;
+		}
+		vf32_mus (2, zx, zx, 1.0f / (1.0f + l));
+		vf32_add (2, ysum, ysum, zx);
+		z += 2;
+	}
+	vf32_mus (2, y, ysum, vf32_norm (2, dmin) / vf32_norm (2, ysum));
+}
+
+
+
+
+
+
+
+
+
+
 //Multiple Object Tracker Particle (MOTP)
 struct MOTP
 {
@@ -145,8 +180,9 @@ void motp_lockon (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 		//The TrackerKeypoint distance will be zero if no keypoints was found or the tracker 
 		//starts to track a new object.
 		vf32_set1 (2, d, 0.0f);
-			
+		
 		uint32_t j = kp.size ();
+		
 		//If the serach radius has expanded too much then 
 		//the tracker is free to jump to a new keypoint which should represent a new object.
 		if (u [0] > MOTP_RELEASE)
@@ -162,7 +198,7 @@ void motp_lockon (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 				if (motp_shortest (m, z0) < MOTP_SEARCHR2_MAX) {continue;}
 				//Now the tracker is free to take this keypoint.
 				//The tracker is moved to the keypoint.
-				//The tracker resets.
+				//The tracker is reset.
 				kp [j].class_id = i;
 				vf32_cpy (2, x0, z0);
 				vf32_set1 (2, x1, 0.0f);
@@ -170,6 +206,7 @@ void motp_lockon (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 				vu32_set1 (1, u, 1);
 			}
 		}
+		
 		//Search for keypoints inside the search radius.
 		else
 		{
@@ -180,11 +217,12 @@ void motp_lockon (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 			uint32_t n = 0;
 			while (j--)
 			{
+				//Calculate vector and length^2 of tracker (i) to keypoint (j).
 				float * z0 = (float *) &kp [j].pt;
 				float zx0 [2];
 				v2f32_sub (zx0, z0, x0);
 				float l = v2f32_norm2 (zx0);
-				//If the tracker sees keypoints inside the search radius and the maximum search radius
+				//If the tracker can see keypoints inside the search radius
 				//then find the average distance (d) to all the keypoints.
 				if (l > r [0]) {continue;}
 				if (kp [j].class_id >= 0 && t [0] < MOTP_MERGE) {continue;}
@@ -192,7 +230,8 @@ void motp_lockon (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 				v2f32_add (d, d, zx0);
 				kp [j].class_id = i;
 			}
-			//Increase the search radius (r) if 0 keypoints (n = 0) was found.
+			//Increase the search radius when no keypoints are found.
+			//Incrament untrack counter when no keypoints are found.
 			if (n == 0) 
 			{
 				r [0] += MOTP_SEARCHR2_GROWRATE_OFFSET;
@@ -202,9 +241,10 @@ void motp_lockon (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 				vu32_add1max (1, u, u, 1, UINT32_MAX);
 				continue;
 			}
-			//Get average distance to all the keypoints.
+			//Calculate the average distance to all keypoints relative of the tracker.
 			v2f32_mus (d, d, 1.0f / n);
-			//Set the search radius the same distance as from the tracker to the keypoints.
+			//Set the search radius the same distance as 
+			//from the tracker to the keypoints plus an offset.
 			r [0] = v2f32_norm2 (d) + MOTP_SEARCHR2_OFFSET;
 			u [0] = 1;
 		}
