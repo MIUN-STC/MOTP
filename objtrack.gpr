@@ -14,7 +14,8 @@ project Objtrack is
 	
 	Main_Files := 
 	(
-		"dist.cpp"
+		"objtrack.cpp"
+		--"dist.cpp"
 	);
 	
 	for Main use Main_Files;

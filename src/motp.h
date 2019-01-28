@@ -10,25 +10,27 @@
 
 
 //Release the tracker after this many untrack steps.
-#define MOTP_RELEASE 10
+#define MOTP_RELEASE 30
 
 //Can merge with others after this many track steps.
-#define MOTP_MERGE 90
+#define MOTP_MERGE 80
 
 //The maximum search radius
 #define MOTP_SEARCHR2_MAX (100.0f*100.0f)
 
 //The search radius growrate when no keypoints are found.
-#define MOTP_SEARCHR2_GROWRATE_OFFSET (5.0f*5.0f)
-#define MOTP_SEARCHR2_GROWRATE_TIMEBOOST (3000.0f)
-#define MOTP_SEARCHR2_GROWRATE_VELBOOST (20.0f)
+#define MOTP_SEARCHR2_GROWRATE_OFFSET (10.0f*10.0f)
+#define MOTP_SEARCHR2_GROWRATE_TIMEBOOST (1000.0f)
+#define MOTP_SEARCHR2_GROWRATE_VELBOOST (10.0f)
 
 //The starting search radius for tracking a new object.
 #define MOTP_SEARCHR2_START (100.0f*100.0f)
 
 //The search radius offset when tracking an object.
 //The search radius is already adaptive but this value can offset the adaptive radius.
-#define MOTP_SEARCHR2_OFFSET (10.0f*10.0f)
+#define MOTP_SEARCHR2_OFFSET (5.0f*5.0f)
+#define MOTP_SEARCHR2_TIMEBOOST (1000.0f)
+#define MOTP_SEARCHR2_VELBOOST (2.0f)
 
 //Tracker mass. Higher value makes it harder to turn.
 #define MOTP_MASS 20.0f
@@ -51,19 +53,24 @@
 
 
 
-
-void motp_dist (float y [2], float x [2], uint32_t n, float z [])
+//Experimental
+void motp_dist (float y [2], float x [2], std::vector <cv::KeyPoint> & kp, float r, uint32_t * n, float t, float ix)
 {
+	vf32_set1 (2, y, 0.0f);
+	n [0] = 0;
 	float dmin [2];
 	float lmin= FLT_MAX;
 	float ysum [2] = {0.0f, 0.0f};
-	uint32_t i = n;
+	uint32_t i = kp.size ();
 	while (i--)
 	{
+		float * z = (float *) &kp [i].pt;
 		//TRACE_F ("%f %f", d [0], d [1]);
 		float zx [2];
 		vf32_sub (2, zx, z, x);
 		float l = vf32_norm2 (2, zx);
+		if (l > r) {continue;}
+		if (kp [i].class_id >= 0 && t < MOTP_MERGE) {continue;}
 		if (l < lmin)
 		{
 			vf32_cpy (2, dmin, zx);
@@ -71,9 +78,14 @@ void motp_dist (float y [2], float x [2], uint32_t n, float z [])
 		}
 		vf32_mus (2, zx, zx, 1.0f / (1.0f + l));
 		vf32_add (2, ysum, ysum, zx);
-		z += 2;
+		n [0] ++;
+		kp [i].class_id = ix;
 	}
-	vf32_mus (2, y, ysum, vf32_norm (2, dmin) / vf32_norm (2, ysum));
+	if (n [0] > 0)
+	{
+		vf32_mus (2, y, ysum, vf32_norm (2, dmin) / vf32_norm (2, ysum));
+	}
+	TRACE_F ("%i %f %f", n [0], y [0], y [1]);
 }
 
 
@@ -109,6 +121,7 @@ void motp_init (struct MOTP * m)
 	m->r  = (float *) calloc (m->cap, sizeof (float) * 1);
 	m->t  = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
 	m->u  = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
+	vu32_set1 (m->cap, m->u, MOTP_RELEASE);
 }
 
 
@@ -120,15 +133,15 @@ void motp_update (struct MOTP * m)
 		float    * x0 = m->x0 + i * 2; //Tracker position
 		float    * x1 = m->x1 + i * 2; //Tracker velocity
 		float    *  d = m->d  + i * 2; //TrackerKeypoint distance
+		uint32_t *  u = m->u  + i * 1; //Tracker track-duration.
 		uint32_t *  t = m->t  + i * 1; //Tracker track-duration.
-		float const mass = 20.0f; //Tracker mass
-		
+		if (u [0] >= MOTP_RELEASE) {continue;}
 		//Use the TrackerKeypoint distance (d) to give the tracker a force towards the keypoints.
 		//Also give new trackers a force boost 
 		//to catchup a fast moving keypoints by using tracking time (t).
 		ASSERT (t [0] > 0);
 		ASSERT (MOTP_MASS > 0);
-		float k = (1.0f / MOTP_MASS) + (MOTP_TIMEBOOST / t [0]);
+		float k = (1.0f / MOTP_MASS) + (MOTP_TIMEBOOST / (t [0] + u [0]));
 		float x2 [2];
 		v2f32_mus (x2, d, k);
 		v2f32_add (x1, x1, x2);
@@ -155,7 +168,7 @@ float motp_shortest (struct MOTP * m, float const z [2])
 	{
 		float    * x0 = m->x0 + i * 2;
 		uint32_t *  u = m->u  + i * 1;
-		//if (u [0] < MOTP_RELEASE) {continue;}
+		if (u [0] >= MOTP_RELEASE) {continue;}
 		float d [2];
 		v2f32_sub (d, x0, z);
 		float l = v2f32_norm2 (d);
@@ -167,6 +180,10 @@ float motp_shortest (struct MOTP * m, float const z [2])
 
 void motp_lockon (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 {
+	//The TrackerKeypoint distance will be zero when 
+	//no keypoints was found or when starting to track a new object
+	vf32_set1 (m->cap * 2, m->d, 0.0f);
+	
 	uint32_t i = m->cap;
 	while (i--)
 	{
@@ -176,19 +193,13 @@ void motp_lockon (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 		float    *      r = m->r      + i * 1; //Tracker search-radius
 		uint32_t *      t = m->t      + i * 1; //Tracker track-duration.
 		uint32_t *      u = m->u      + i * 1; //Tracker track-duration.
-		
-		//The TrackerKeypoint distance will be zero if no keypoints was found or the tracker 
-		//starts to track a new object.
-		vf32_set1 (2, d, 0.0f);
-		
 		uint32_t j = kp.size ();
 		
-		//If the serach radius has expanded too much then 
-		//the tracker is free to jump to a new keypoint which should represent a new object.
-		if (u [0] > MOTP_RELEASE)
+
+		
+		
+		if (u [0] >= MOTP_RELEASE)
 		{
-			vf32_set1 (2, x0, 0.0f);
-			vu32_set1 (1, t, 1);
 			while (j--)
 			{
 				//The tracker can not jump to the keypoint (z) if it belong to another tracker.
@@ -201,54 +212,67 @@ void motp_lockon (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 				//The tracker is reset.
 				kp [j].class_id = i;
 				vf32_cpy (2, x0, z0);
+				vu32_set1 (1, u, 1);
 				vf32_set1 (2, x1, 0.0f);
 				vf32_set1 (1, r, MOTP_SEARCHR2_START);
-				vu32_set1 (1, u, 1);
+				vu32_set1 (1, t, 1);
 			}
+			continue;
+		}
+
+
+		//Increase the tracking time (t).
+		vu32_add1max (1, t, t, 1, UINT32_MAX);
+		
+		//Start with 0 found keypoints.
+		uint32_t n = 0;
+		
+		//Look for keypoints:
+		while (j--)
+		{
+			//Calculate vector and length^2 of tracker (i) to keypoint (j).
+			float * z0 = (float *) &kp [j].pt;
+			float zx0 [2];
+			v2f32_sub (zx0, z0, x0);
+			float l = v2f32_norm2 (zx0);
+			//If the tracker can see keypoints inside the search radius
+			//then find the average distance (d) to all the keypoints.
+			if (l > r [0]) {continue;}
+			if (kp [j].class_id >= 0 && t [0] < MOTP_MERGE) {continue;}
+			n ++;
+			v2f32_add (d, d, zx0);
+			kp [j].class_id = i;
 		}
 		
-		//Search for keypoints inside the search radius.
-		else
+		
+		//motp_dist (d, x0, kp, r [0], &n, t [0], i);
+		
+		//Increase the search radius when no keypoints are found.
+		//Incrament untrack counter when no keypoints are found.
+		if (n == 0) 
 		{
-			//Increase the tracking time (t).
-			//The serach radius is below limit so we assume the tracker is tracking something
-			//even if there is no keypoint at this time.
-			vu32_add1max (1, t, t, 1, UINT32_MAX);
-			uint32_t n = 0;
-			while (j--)
-			{
-				//Calculate vector and length^2 of tracker (i) to keypoint (j).
-				float * z0 = (float *) &kp [j].pt;
-				float zx0 [2];
-				v2f32_sub (zx0, z0, x0);
-				float l = v2f32_norm2 (zx0);
-				//If the tracker can see keypoints inside the search radius
-				//then find the average distance (d) to all the keypoints.
-				if (l > r [0]) {continue;}
-				if (kp [j].class_id >= 0 && t [0] < MOTP_MERGE) {continue;}
-				n ++;
-				v2f32_add (d, d, zx0);
-				kp [j].class_id = i;
-			}
-			//Increase the search radius when no keypoints are found.
-			//Incrament untrack counter when no keypoints are found.
-			if (n == 0) 
-			{
-				r [0] += MOTP_SEARCHR2_GROWRATE_OFFSET;
-				r [0] += MOTP_SEARCHR2_GROWRATE_VELBOOST * v2f32_norm2 (x1);
-				r [0] += MOTP_SEARCHR2_GROWRATE_TIMEBOOST / t [0];
-				r [0] = MIN (r [0], MOTP_SEARCHR2_MAX);
-				vu32_add1max (1, u, u, 1, UINT32_MAX);
-				continue;
-			}
-			//Calculate the average distance to all keypoints relative of the tracker.
-			v2f32_mus (d, d, 1.0f / n);
-			//Set the search radius the same distance as 
-			//from the tracker to the keypoints plus an offset.
-			r [0] = v2f32_norm2 (d) + MOTP_SEARCHR2_OFFSET;
-			u [0] = 1;
+			r [0] += MOTP_SEARCHR2_GROWRATE_OFFSET;
+			r [0] += MOTP_SEARCHR2_GROWRATE_VELBOOST * v2f32_norm2 (x1);
+			r [0] += MOTP_SEARCHR2_GROWRATE_TIMEBOOST / t [0];
+			r [0] = MIN (r [0], MOTP_SEARCHR2_MAX);
+			vu32_add1max (1, u, u, 1, UINT32_MAX);
+			continue;
 		}
+		
+		//Calculate the average distance to all keypoints relative from the tracker.
+		v2f32_mus (d, d, 1.0f / n);
+		//Set the search radius the same distance as 
+		//from the tracker to the keypoints plus an offset.
+		r [0] = MOTP_SEARCHR2_OFFSET;
+		r [0] += MOTP_SEARCHR2_VELBOOST * v2f32_norm2 (x1);
+		r [0] += MOTP_SEARCHR2_TIMEBOOST / t [0];
+		r [0] += v2f32_norm2 (d);
+		u [0] = 1;
 	}
+	
+	
+	
+	
 }
 
 
@@ -303,7 +327,7 @@ void draw_motp
 		uint32_t * u = m->u + i * 1;
 		//TRACE_F ("%i %f %f", i, x [0], x [1]);
 		float r0 = MIN (sqrtf (r [0]), 100000.0f);
-		snprintf (text, 20, "%u %u", i, t [0]);
+		snprintf (text, 20, "%u %u", i, u [0]);
 		//snprintf (text, 10, "%u %f", i, e [0]);
 		//snprintf (text, 10, "%u", i);
 		cv::Point2f p0 (x0 [0], x0 [1]);
