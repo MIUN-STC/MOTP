@@ -39,7 +39,7 @@ int main (int argc, char** argv)
 	// Position of frame 
 	//cap.set (cv::CAP_PROP_POS_FRAMES, (2*60*60+35*60 +10)*20);
 	//cap.set (cv::CAP_PROP_POS_FRAMES, (5*60*60+48*60 + 30)*20);
-	//cap.set (cv::CAP_PROP_POS_FRAMES, (12*60*60+25*60)*20);
+	cap.set (cv::CAP_PROP_POS_FRAMES, (12*60*60+25*60)*20);
 	//Duration 5 or 10 minutes
 	double w = cap.get (cv::CAP_PROP_FRAME_WIDTH);
 	double h = cap.get (cv::CAP_PROP_FRAME_HEIGHT);
@@ -203,6 +203,9 @@ int main (int argc, char** argv)
 		{
 			motp_lockon (&m, kp);
 			motp_update (&m);
+			motp_release (&m, kp);
+			motp_expand (&m, kp);
+			
 			draw_kp (f1, kp);
 			draw_motp (f1, &m);
 			//draw_trace (f2, &pm);
