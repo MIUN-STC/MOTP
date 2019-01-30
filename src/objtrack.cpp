@@ -17,6 +17,7 @@
 #include "objtrack.h"
 #include "option.h"
 #include "motp.h"
+#include "draw.h"
 
 
 
@@ -205,15 +206,14 @@ int main (int argc, char** argv)
 		if (flags & UPDATE_TRACKER)
 		{
 			vf32_cpy (m.cap * 2, x0, m.x0);
-			motp_lockon (&m, kp);
+			motp_search (&m, kp);
 			motp_update (&m);
 			motp_release (&m, kp);
 			motp_expand (&m, kp);
-			draw_chain (f3, m.cap, m.t, m.u, x0, m.x0);
 			
+			draw_trace (f3, m.cap, m.t, m.u, x0, m.x0);
 			draw_kp (f1, kp);
 			draw_motp (f1, &m);
-			//draw_trace (f3, &pm);
 		}
 		
 		

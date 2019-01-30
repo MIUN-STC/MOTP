@@ -1,3 +1,4 @@
+#pragma once
 #include <opencv2/bgsegm.hpp>
 #include <opencv2/videoio.hpp>
 #include <opencv2/highgui.hpp>
@@ -136,6 +137,7 @@ void motp_dist (float d [2], float x [2], std::vector <cv::KeyPoint> & kp, float
 //Multiple Object Tracker Particle (MOTP)
 struct MOTP
 {
+	uint32_t id_counter;
 	uint32_t cap;  //Capacity
 	float    * x0; //Tracker position
 	float    * x1; //Tracker velocity
@@ -143,11 +145,13 @@ struct MOTP
 	float    * d;  //TrackerDetected vector.
 	uint32_t * t;  //Tracker track-duration.
 	uint32_t * u;  //Tracker untrack-duration.
+	uint32_t * id; //Tracker id
 };
 
 
 void motp_init (struct MOTP * m)
 {
+	m->id_counter = 0;
 	//Allocate memory where memory size is according to 
 	//capacity times number of dimensions.
 	//All bits is set to zero.
@@ -157,12 +161,14 @@ void motp_init (struct MOTP * m)
 	m->r  = (float *) calloc (m->cap, sizeof (float) * 1);
 	m->t  = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
 	m->u  = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
+	m->id = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
 	ASSERT (m->x0);
 	ASSERT (m->x1);
 	ASSERT (m->d);
 	ASSERT (m->r);
 	ASSERT (m->t);
 	ASSERT (m->u);
+	ASSERT (m->id);
 	vu32_set1 (m->cap, m->u, MOTP_RELEASE);
 }
 
@@ -172,12 +178,17 @@ void motp_update (struct MOTP * m)
 	uint32_t i = m->cap;
 	while (i--)
 	{
-		float    * x0 = m->x0 + i * 2; //Tracker position
-		float    * x1 = m->x1 + i * 2; //Tracker velocity
-		float    *  d = m->d  + i * 2; //TrackerKeypoint distance
-		uint32_t *  u = m->u  + i * 1; //Tracker track-duration.
-		uint32_t *  t = m->t  + i * 1; //Tracker track-duration.
+		float    *     x0 = m->x0     + i * 2; //Tracker position (dim=2)
+		float    *     x1 = m->x1     + i * 2; //Tracker velocity (dim=2)
+		float    *      d = m->d      + i * 2; //TrackerKeypoint distance (dim=2)
+		float    *      r = m->r      + i * 1; //Tracker search-radius (dim=1)
+		uint32_t *      t = m->t      + i * 1; //Tracker track-duration (dim=1)
+		uint32_t *      u = m->u      + i * 1; //Tracker untrack-duration (dim=1)
+		uint32_t *     id = m->id     + i * 1; //Tracker id (dim=1)
+		
+		//Do not update released trackers.
 		if (u [0] >= MOTP_RELEASE) {continue;}
+		
 		//Use the TrackerKeypoint distance (d) to give the tracker a force towards the keypoints.
 		//Also give new trackers a force boost 
 		//to catchup a fast moving keypoints by using tracking time (t).
@@ -197,7 +208,7 @@ void motp_update (struct MOTP * m)
 		//Finaly update the position.
 		v2f32_add (x0, x0, x1mix);
 	}
-	//Slow down acc and vel.
+	//Here we can choose to slow down the velocity.
 	vf32_mus (m->cap*2, m->x1, m->x1, MOTP_VELREDUCE);
 }
 
@@ -208,19 +219,25 @@ float motp_shortest (struct MOTP * m, float const z [2])
 	uint32_t i = m->cap;
 	while (i--)
 	{
-		float    * x0 = m->x0 + i * 2;
-		uint32_t *  u = m->u  + i * 1;
+		float    *     x0 = m->x0     + i * 2; //Tracker position (dim=2)
+		float    *     x1 = m->x1     + i * 2; //Tracker velocity (dim=2)
+		float    *      d = m->d      + i * 2; //TrackerKeypoint distance (dim=2)
+		float    *      r = m->r      + i * 1; //Tracker search-radius (dim=1)
+		uint32_t *      t = m->t      + i * 1; //Tracker track-duration (dim=1)
+		uint32_t *      u = m->u      + i * 1; //Tracker untrack-duration (dim=1)
+		uint32_t *     id = m->id     + i * 1; //Tracker id (dim=1)
+		//Ignore released trackers.
 		if (u [0] >= MOTP_RELEASE) {continue;}
-		float d [2];
-		v2f32_sub (d, x0, z);
-		float l = v2f32_norm2 (d);
+		float zx0 [2];
+		v2f32_sub (zx0, z, x0);
+		float l = v2f32_norm2 (zx0);
 		if (l < lmin) {lmin = l;}
 	}
 	return lmin;
 }
 
 
-void motp_lockon (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
+void motp_search (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 {
 	vu32_add1max (m->cap    , m->u, m->u, 1, UINT32_MAX);
 	vf32_set1    (m->cap * 2, m->d, 0.0f);
@@ -232,14 +249,16 @@ void motp_lockon (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 		uint32_t imin = UINT32_MAX;
 		float dmin [2];
 		float lmin = FLT_MAX;
+		//Find closest keypoint:
 		while (i--)
 		{
-			float    *     x0 = m->x0     + i * 2; //Tracker position
-			float    *     x1 = m->x1     + i * 2; //Tracker velocity
-			float    *      d = m->d      + i * 2; //TrackerKeypoint distance
-			float    *      r = m->r      + i * 1; //Tracker search-radius
-			uint32_t *      t = m->t      + i * 1; //Tracker track-duration.
-			uint32_t *      u = m->u      + i * 1; //Tracker track-duration.			
+			float    *     x0 = m->x0     + i * 2; //Tracker position (dim=2)
+			float    *     x1 = m->x1     + i * 2; //Tracker velocity (dim=2)
+			float    *      d = m->d      + i * 2; //TrackerKeypoint distance (dim=2)
+			float    *      r = m->r      + i * 1; //Tracker search-radius (dim=1)
+			uint32_t *      t = m->t      + i * 1; //Tracker track-duration (dim=1)
+			uint32_t *      u = m->u      + i * 1; //Tracker untrack-duration (dim=1)
+			uint32_t *     id = m->id     + i * 1; //Tracker id (dim=1)		
 			float zx0 [2];
 			vf32_sub (2, zx0, z0, x0);
 			float l = vf32_norm2 (2, zx0);
@@ -254,12 +273,13 @@ void motp_lockon (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 		if (imin != UINT32_MAX)
 		{
 			//TRACE_F ("%f", lmin);
-			float    *     x0 = m->x0     + imin * 2; //Tracker position
-			float    *     x1 = m->x1     + imin * 2; //Tracker velocity
-			float    *      d = m->d      + imin * 2; //TrackerKeypoint distance
-			float    *      r = m->r      + imin * 1; //Tracker search-radius
-			uint32_t *      t = m->t      + imin * 1; //Tracker track-duration.
-			uint32_t *      u = m->u      + imin * 1; //Tracker track-duration.
+			float    *     x0 = m->x0     + imin * 2; //Tracker position (dim=2)
+			float    *     x1 = m->x1     + imin * 2; //Tracker velocity (dim=2)
+			float    *      d = m->d      + imin * 2; //TrackerKeypoint distance (dim=2)
+			float    *      r = m->r      + imin * 1; //Tracker search-radius (dim=1)
+			uint32_t *      t = m->t      + imin * 1; //Tracker track-duration (dim=1)
+			uint32_t *      u = m->u      + imin * 1; //Tracker untrack-duration (dim=1)
+			uint32_t *     id = m->id     + imin * 1; //Tracker id (dim=1)
 			vf32_cpy (2, d, dmin);
 			vu32_set1 (1, u, 0);
 			vu32_add1max (1, t, t, 1, UINT32_MAX);
@@ -273,13 +293,16 @@ void motp_release (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 	uint32_t i = m->cap;
 	while (i--)
 	{
-		float    *     x0 = m->x0     + i * 2; //Tracker position
-		float    *     x1 = m->x1     + i * 2; //Tracker velocity
-		float    *      d = m->d      + i * 2; //TrackerKeypoint distance
-		float    *      r = m->r      + i * 1; //Tracker search-radius
-		uint32_t *      t = m->t      + i * 1; //Tracker track-duration.
-		uint32_t *      u = m->u      + i * 1; //Tracker track-duration.
+		float    *     x0 = m->x0     + i * 2; //Tracker position (dim=2)
+		float    *     x1 = m->x1     + i * 2; //Tracker velocity (dim=2)
+		float    *      d = m->d      + i * 2; //TrackerKeypoint distance (dim=2)
+		float    *      r = m->r      + i * 1; //Tracker search-radius (dim=1)
+		uint32_t *      t = m->t      + i * 1; //Tracker track-duration (dim=1)
+		uint32_t *      u = m->u      + i * 1; //Tracker untrack-duration (dim=1)
+		uint32_t *     id = m->id     + i * 1; //Tracker id (dim=1)
 		
+		//(u) is the amount of steps the tracker is not been tracking.
+		//Check if the the tracker has not been tracking for a while:
 		if (u [0] >= MOTP_RELEASE)
 		{
 			uint32_t j = kp.size ();
@@ -288,20 +311,26 @@ void motp_release (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 				//The tracker can not jump to the keypoint (z) if it belong to another tracker.
 				if (kp [j].class_id != -1) {continue;}
 				float * z0 = (float *) &kp [j].pt;
-				//The tracker can not jump to the keypoint (z) if other tracker is in proximity.
+				//The tracker can not jump to the keypoint (z) if other trackers are in proximity.
 				if (motp_shortest (m, z0) < MOTP_SEARCHR2_MAX) {continue;}
 				//Now the tracker is free to take this keypoint.
 				//The tracker is moved to the keypoint.
 				//The tracker is reset.
-				kp [j].class_id = i;
 				vf32_cpy (2, x0, z0);
 				vu32_set1 (1, u, 0);
 				vf32_set1 (2, x1, 0.0f);
 				vf32_set1 (1, r, MOTP_SEARCHR2_START);
 				vu32_set1 (1, t, 1);
+				//Generate a new id for the tracker
+				kp [j].class_id = m->id_counter;
+				id [0]          = m->id_counter;
+				m->id_counter ++;
 			}
-			continue;
 		}
+		
+		
+		
+		
 	}
 }
 
@@ -335,91 +364,3 @@ void motp_expand (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 }
 
 
-
-
-
-
-
-
-
-
-
-void draw_kp (cv::Mat &img, std::vector <cv::KeyPoint> const & kp)
-{
-	char text [10];
-	uint32_t i = kp.size ();
-	while (i--)
-	{
-		cv::Point2f p = kp [i].pt;
-		float d = kp [i].size;
-		snprintf (text, 10, "%i", kp [i].class_id);
-		//cv::circle (img, p, d, cv::Scalar (255, 0, 255), 0.5);
-		cv::drawMarker (img, p,  cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 4, 1);
-		//cv::putText (img, text, p + cv::Point2f (-10.0f, -10.0f), CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (255, 0, 255), 1);
-	}
-}
-
-
-void draw_motp 
-(
-	cv::Mat &img,
-	struct MOTP * m
-)
-{
-	char text [20];
-	uint32_t i = m->cap;
-	while (i--)
-	{
-		float * x0 = m->x0 + i * 2;
-		float * x1 = m->x1 + i * 2;
-		float * d = m->d + i * 2;
-		float * r = m->r + i * 1;
-		uint32_t * t = m->t + i * 1;
-		uint32_t * u = m->u + i * 1;
-		if (u [0] >= MOTP_RELEASE) {continue;};
-		//TRACE_F ("%i %f %f", i, x [0], x [1]);
-		float r0 = MIN (sqrtf (r [0]), 100000.0f);
-		snprintf (text, 20, "%u %u", i, u [0]);
-		//snprintf (text, 10, "%u %f", i, e [0]);
-		//snprintf (text, 10, "%u", i);
-		cv::Point2f p0 (x0 [0], x0 [1]);
-		cv::Point2f p1 (x1 [0], x1 [1]);
-		cv::Point2f pd (d [0], d [1]);
-		
-		//TRACE_F ("%i %f %f", i, r0, sqrtf (PM_MAX_SEARCHR2));
-		cv::circle      (img, p0, r0, cv::Scalar (255, 100, 150), 1.5);
-		//cv::circle      (img, p0, sqrtf (MOTP_SEARCHR2_MAX), cv::Scalar (255, 150, 100), 1);
-		//cv::drawMarker  (img, p0, cv::Scalar (0, 255, 255), 1.5, 10, 1);
-		cv::putText     (img, text, p0+cv::Point2f (5,5), CV_FONT_HERSHEY_DUPLEX, 0.8, cv::Scalar (50, 100, 255), 1);
-		cv::arrowedLine (img, p0, p0+p1*10.0f, cv::Scalar (0, 0, 255), 1.5, 8, 0, 0.1);
-		cv::arrowedLine (img, p0, p0+pd, cv::Scalar (0, 255, 0), 1.5, 8, 0, 0.1);
-		//cv::line (img, p0, p0+pd, cv::Scalar (0, 255, 0), 1, 8, 0);
-	}
-}
-
-
-
-void draw_chain 
-(
-	cv::Mat &img,
-	uint32_t n,
-	uint32_t t [],
-	uint32_t u [],
-	float a [],
-	float b []
-)
-{
-	while (n--)
-	{
-		if (u [0] < MOTP_RELEASE && t [0] > 2)
-		{
-			srand (n);
-			cv::Scalar color (rand () & 255, rand () & 255, rand () & 255);
-			cv::arrowedLine (img, cv::Point2f (a [0], a [1]), cv::Point2f (b [0], b [1]), color, 1.5, 8, 0, 0.1);
-		}
-		a += 2;
-		b += 2;
-		u += 1;
-		t += 1;
-	}
-}
