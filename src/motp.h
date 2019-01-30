@@ -157,6 +157,12 @@ void motp_init (struct MOTP * m)
 	m->r  = (float *) calloc (m->cap, sizeof (float) * 1);
 	m->t  = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
 	m->u  = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
+	ASSERT (m->x0);
+	ASSERT (m->x1);
+	ASSERT (m->d);
+	ASSERT (m->r);
+	ASSERT (m->t);
+	ASSERT (m->u);
 	vu32_set1 (m->cap, m->u, MOTP_RELEASE);
 }
 
@@ -381,12 +387,39 @@ void draw_motp
 		cv::Point2f pd (d [0], d [1]);
 		
 		//TRACE_F ("%i %f %f", i, r0, sqrtf (PM_MAX_SEARCHR2));
-		cv::circle      (img, p0, r0, cv::Scalar (255, 100, 150), 1);
+		cv::circle      (img, p0, r0, cv::Scalar (255, 100, 150), 1.5);
 		//cv::circle      (img, p0, sqrtf (MOTP_SEARCHR2_MAX), cv::Scalar (255, 150, 100), 1);
-		cv::drawMarker  (img, p0, cv::Scalar (0, 255, 255), 1, 10, 1);
-		cv::putText     (img, text, p0+cv::Point2f (5,5), CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (50, 100, 255), 1);
-		cv::arrowedLine (img, p0, p0+p1*10.0f, cv::Scalar (0, 0, 255), 1, 8, 0, 0.1);
-		cv::arrowedLine (img, p0, p0+pd, cv::Scalar (0, 255, 0), 1, 8, 0, 0.1);
+		//cv::drawMarker  (img, p0, cv::Scalar (0, 255, 255), 1.5, 10, 1);
+		cv::putText     (img, text, p0+cv::Point2f (5,5), CV_FONT_HERSHEY_DUPLEX, 0.8, cv::Scalar (50, 100, 255), 1);
+		cv::arrowedLine (img, p0, p0+p1*10.0f, cv::Scalar (0, 0, 255), 1.5, 8, 0, 0.1);
+		cv::arrowedLine (img, p0, p0+pd, cv::Scalar (0, 255, 0), 1.5, 8, 0, 0.1);
 		//cv::line (img, p0, p0+pd, cv::Scalar (0, 255, 0), 1, 8, 0);
+	}
+}
+
+
+
+void draw_chain 
+(
+	cv::Mat &img,
+	uint32_t n,
+	uint32_t t [],
+	uint32_t u [],
+	float a [],
+	float b []
+)
+{
+	while (n--)
+	{
+		if (u [0] < MOTP_RELEASE && t [0] > 2)
+		{
+			srand (n);
+			cv::Scalar color (rand () & 255, rand () & 255, rand () & 255);
+			cv::arrowedLine (img, cv::Point2f (a [0], a [1]), cv::Point2f (b [0], b [1]), color, 1.5, 8, 0, 0.1);
+		}
+		a += 2;
+		b += 2;
+		u += 1;
+		t += 1;
 	}
 }

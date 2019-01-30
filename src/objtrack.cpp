@@ -38,8 +38,8 @@ int main (int argc, char** argv)
 	
 	// Position of frame 
 	//cap.set (cv::CAP_PROP_POS_FRAMES, (2*60*60+35*60 +10)*20);
-	//cap.set (cv::CAP_PROP_POS_FRAMES, (5*60*60+48*60 + 30)*20);
-	cap.set (cv::CAP_PROP_POS_FRAMES, (12*60*60+25*60)*20);
+	cap.set (cv::CAP_PROP_POS_FRAMES, (5*60*60+48*60 + 30)*20);
+	//cap.set (cv::CAP_PROP_POS_FRAMES, (12*60*60+25*60)*20);
 	//Duration 5 or 10 minutes
 	double w = cap.get (cv::CAP_PROP_FRAME_WIDTH);
 	double h = cap.get (cv::CAP_PROP_FRAME_HEIGHT);
@@ -47,6 +47,7 @@ int main (int argc, char** argv)
 	cv::Mat f0 (h, w, CV_8UC3);
 	cv::Mat f1 (h, w, CV_8UC3);
 	cv::Mat f2 (h, w, CV_8UC3);
+	cv::Mat f3 (h, w, CV_8UC3, cv::Scalar (0,0,0));
 	cv::Mat mask (h, w, CV_8UC1);
 	
 	cv::Ptr<cv::BackgroundSubtractorKNN> bgfs;
@@ -100,6 +101,8 @@ int main (int argc, char** argv)
 	m.cap = 30;
 	motp_init (&m);
 	v2f32_random_wh (m.cap, m.x0, f0.cols, f0.rows);
+	float * x0 = (float *) malloc (m.cap * sizeof (float) * 2);
+	ASSERT (x0);
 	
 	while (1)
 	{
@@ -201,20 +204,23 @@ int main (int argc, char** argv)
 
 		if (flags & UPDATE_TRACKER)
 		{
+			vf32_cpy (m.cap * 2, x0, m.x0);
 			motp_lockon (&m, kp);
 			motp_update (&m);
 			motp_release (&m, kp);
 			motp_expand (&m, kp);
+			draw_chain (f3, m.cap, m.t, m.u, x0, m.x0);
 			
 			draw_kp (f1, kp);
 			draw_motp (f1, &m);
-			//draw_trace (f2, &pm);
+			//draw_trace (f3, &pm);
 		}
 		
 		
 		
 		if (flags & (UPDATE_TRACKER | UPDATE_WORLD))
 		{
+			f1 += f3;
 			SDLCV_CopyTexture (texture, f1);
 			SDL_RenderClear (renderer);
 			SDL_RenderCopy (renderer, texture, NULL, NULL);
