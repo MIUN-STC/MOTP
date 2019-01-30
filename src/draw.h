@@ -10,7 +10,7 @@ void draw_kp (cv::Mat &img, std::vector <cv::KeyPoint> const & kp)
 	{
 		cv::Point2f p = kp [i].pt;
 		float d = kp [i].size;
-		snprintf (text, 10, "%i", kp [i].class_id);
+		//snprintf (text, 10, "%i", kp [i].class_id);
 		//cv::circle (img, p, d, cv::Scalar (255, 0, 255), 0.5);
 		cv::drawMarker (img, p,  cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 4, 1);
 		//cv::putText (img, text, p + cv::Point2f (-10.0f, -10.0f), CV_FONT_HERSHEY_DUPLEX, 0.5, cv::Scalar (255, 0, 255), 1);
@@ -40,6 +40,7 @@ void draw_motp
 		//TRACE_F ("%i %f %f", i, x [0], x [1]);
 		float r0 = MIN (sqrtf (r [0]), 100000.0f);
 		snprintf (text, 20, "%u %u", id [0], t [0]);
+		//snprintf (text, 20, "%u %u %u", i, id [0], t [0]);
 		//snprintf (text, 10, "%u %f", i, e [0]);
 		//snprintf (text, 10, "%u", i);
 		cv::Point2f p0 (x0 [0], x0 [1]);
@@ -67,6 +68,7 @@ void draw_trace
 (
 	cv::Mat &img,
 	uint32_t n, //Number of elements
+	uint32_t id [], //Tracked id, (dim=1)
 	uint32_t t [], //Tracked amount, (dim=1)
 	uint32_t u [], //Untracked amount (dim=1)
 	float xa [], //Old position (dim=2)
@@ -75,9 +77,9 @@ void draw_trace
 {
 	while (n--)
 	{
-		if (u [0] < MOTP_RELEASE && t [0] > 2)
+		if (u [0] < MOTP_RELEASE && t [0] > 4)
 		{
-			srand (n);
+			srand (id [0]);
 			cv::Scalar color (rand () & 255, rand () & 255, rand () & 255);
 			cv::Point2f a (xa [0], xa [1]);
 			cv::Point2f b (xb [0], xb [1]);
@@ -91,5 +93,6 @@ void draw_trace
 		xb += 2;
 		u += 1;
 		t += 1;
+		id += 1;
 	}
 }

@@ -14,14 +14,15 @@
 #include <csc/v2.h> //Vector operations.
 
 //Application
-#include "objtrack.h"
 #include "option.h"
 #include "motp.h"
 #include "draw.h"
 
 
 
-
+#define QUIT     0x0001
+#define UPDATE   0x0002
+#define SEMIAUTO 0x0004
 
 
 
@@ -107,6 +108,7 @@ int main (int argc, char** argv)
 	
 	while (1)
 	{
+		if (flags & SEMIAUTO) {flags &= ~(UPDATE);}
 		while (SDL_PollEvent (&event))
 		{
 			switch (event.type)
@@ -121,90 +123,36 @@ int main (int argc, char** argv)
 					case SDLK_ESCAPE:
 					flags |= QUIT;
 					break;
-
-					case SDLK_p:
-					flags ^= PAUSE;
-					break;
-					
-					case SDLK_u:
-					flags ^= UPDATE_TRACKER;
-					flags |= SEMIAUTO;
-					break;
-					
-					case SDLK_r:
-					kp.resize (0);
-					flags ^= UPDATE_TRACKER;
-					flags |= SEMIAUTO;
-					break;
 					
 					case SDLK_RIGHT:
-					flags ^= UPDATE_WORLD | UPDATE_TRACKER;
+					flags ^= UPDATE;
 					flags |= SEMIAUTO;
 					break;
 					
 					case SDLK_SPACE:
-					flags ^= UPDATE_WORLD | UPDATE_TRACKER;
+					flags ^= UPDATE;
 					flags &= ~SEMIAUTO;
 					break;
 				}
 				break;
 				
-				case SDL_MOUSEBUTTONDOWN:
-				{
-					//Convert the mouse position to OpenCV mat/image (f0) coordinate system.
-					int w;
-					int h;
-					SDL_GetWindowSize (window, &w, &h);
-					
-					if (event.button.button == SDL_BUTTON_LEFT && kp.size () > 0)
-					{
-						kp [0].class_id =  -1;
-						float * x = (float *) &kp [0].pt;
-						x [0] = (event.motion.x * f0.cols) / w;
-						x [1] = (event.motion.y * f0.rows) / h;
-					}
-					
-					if (event.button.button == SDL_BUTTON_RIGHT)
-					{
-						cv::Point2f p;
-						p.x = (event.motion.x * f0.cols) / w;
-						p.y = (event.motion.y * f0.rows) / h;
-						kp.push_back (cv::KeyPoint (p, 0.0f));
-					}	
-		
-					flags ^= UPDATE_TRACKER;
-					flags |= SEMIAUTO;
-					//TRACE_F ("%i", kp.size ());
-				}
-
-				break;
-				
-				case SDL_MOUSEBUTTONUP:
-				break;
-					
-				case SDL_MOUSEMOTION:
-				break;
+	
 			}
 		}
 		if (flags & QUIT) {break;}
-		if (flags & PAUSE) {continue;}
-	
+
 		
-		if (flags & UPDATE_WORLD)
+		if (flags & UPDATE)
 		{
 			flags |= cap.read (f0) ? 0 : QUIT;
 			if (flags & QUIT) {break;}
-			f0.copyTo (f1);
+			//f0.copyTo (f1);
 			cv::morphologyEx (f0, f1, cv::MORPH_GRADIENT, element);
 			bgfs->apply (f1, mask);
 			cv::blur (mask, mask, cv::Size (3, 3));
 			blobber->detect (mask, kp);
 			f0.copyTo (f1);
-		}
-		
-
-		if (flags & UPDATE_TRACKER)
-		{
+			
 			vf32_cpy (m.cap * 2, x0, m.x0);
 			motp_search (&m, kp);
 			motp_update (&m);
@@ -214,12 +162,7 @@ int main (int argc, char** argv)
 			draw_trace (f3, m.cap, m.id, m.t, m.u, x0, m.x0);
 			draw_kp (f1, kp);
 			draw_motp (f1, &m);
-		}
-		
-		
-		
-		if (flags & (UPDATE_TRACKER | UPDATE_WORLD))
-		{
+
 			f1 += f3;
 			SDLCV_CopyTexture (texture, f1);
 			SDL_RenderClear (renderer);
@@ -228,11 +171,12 @@ int main (int argc, char** argv)
 			f1.setTo (0);
 		}
 		
-		if (flags & SEMIAUTO) {flags &= ~(UPDATE_WORLD | UPDATE_TRACKER);}
+		
 		
 		usleep (50000);
 	}
 	
 	return 0;
 }
+
 

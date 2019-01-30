@@ -9,15 +9,18 @@
 #include <csc/v.h> //Vector operations.
 #include <csc/v2.h> //Vector operations.
 
+#include <string.h>
 
 //Release the tracker after this many untrack steps.
-#define MOTP_RELEASE 10
+#define MOTP_RELEASE 20
 
 //Can merge with others after this many track steps.
 #define MOTP_MERGE 200
 
 //The maximum search radius
 #define MOTP_SEARCHR2_MAX (100.0f*100.0f)
+
+#define MOTP_RELEASE_PROXIMITY (50.0f*50.0f)
 
 //The search radius growrate when no keypoints are found.
 #define MOTP_SEARCHR2_GROWRATE_OFFSET (10.0f*10.0f)
@@ -139,24 +142,26 @@ struct MOTP
 {
 	uint32_t id_counter;
 	uint32_t cap;  //Capacity
-	float    * x0; //Tracker position
-	float    * x1; //Tracker velocity
-	float    * r;  //Tracker search-radius
-	float    * d;  //TrackerDetected vector.
-	uint32_t * t;  //Tracker track-duration.
-	uint32_t * u;  //Tracker untrack-duration.
-	uint32_t * id; //Tracker id
+	float    * x0; //Tracker position (dim=2)
+	float    * x1; //Tracker velocity (dim=2)
+	float    * x2; //Tracker acceleration (dim=2)
+	float    * d;  //TrackerDetected vector (dim=2)
+	float    * r;  //Tracker search-radius (dim=1)
+	uint32_t * t;  //Tracker track-duration (dim=1)
+	uint32_t * u;  //Tracker untrack-duration (dim=1)
+	uint32_t * id; //Tracker id (dim=1)
 };
 
 
 void motp_init (struct MOTP * m)
 {
-	m->id_counter = 0;
+	m->id_counter = 1;
 	//Allocate memory where memory size is according to 
 	//capacity times number of dimensions.
 	//All bits is set to zero.
 	m->x0 = (float *) calloc (m->cap, sizeof (float) * 2);
 	m->x1 = (float *) calloc (m->cap, sizeof (float) * 2);
+	m->x2 = (float *) calloc (m->cap, sizeof (float) * 2);
 	m->d  = (float *) calloc (m->cap, sizeof (float) * 2);
 	m->r  = (float *) calloc (m->cap, sizeof (float) * 1);
 	m->t  = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
@@ -164,12 +169,18 @@ void motp_init (struct MOTP * m)
 	m->id = (uint32_t *) calloc (m->cap, sizeof (uint32_t) * 1);
 	ASSERT (m->x0);
 	ASSERT (m->x1);
+	ASSERT (m->x2);
 	ASSERT (m->d);
 	ASSERT (m->r);
 	ASSERT (m->t);
 	ASSERT (m->u);
 	ASSERT (m->id);
-	vu32_set1 (m->cap, m->u, MOTP_RELEASE);
+	vu32_set1 (m->cap, m->u, UINT32_MAX);
+	for (uint32_t i = 0; i < m->cap; ++i)
+	{
+		//m->id [i] = m->id_counter;
+		//m->id_counter ++;
+	}
 }
 
 
@@ -180,6 +191,7 @@ void motp_update (struct MOTP * m)
 	{
 		float    *     x0 = m->x0     + i * 2; //Tracker position (dim=2)
 		float    *     x1 = m->x1     + i * 2; //Tracker velocity (dim=2)
+		float    *     x2 = m->x2     + i * 2; //Tracker acceleration (dim=2)
 		float    *      d = m->d      + i * 2; //TrackerKeypoint distance (dim=2)
 		float    *      r = m->r      + i * 1; //Tracker search-radius (dim=1)
 		uint32_t *      t = m->t      + i * 1; //Tracker track-duration (dim=1)
@@ -195,7 +207,6 @@ void motp_update (struct MOTP * m)
 		ASSERT (t [0] > 0);
 		ASSERT (MOTP_MASS > 0);
 		float k = (1.0f / MOTP_MASS) + (MOTP_TIMEBOOST / (t [0] + u [0]));
-		float x2 [2];
 		v2f32_mus (x2, d, k);
 		v2f32_add (x1, x1, x2);
 		
@@ -258,7 +269,8 @@ void motp_search (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 			float    *      r = m->r      + i * 1; //Tracker search-radius (dim=1)
 			uint32_t *      t = m->t      + i * 1; //Tracker track-duration (dim=1)
 			uint32_t *      u = m->u      + i * 1; //Tracker untrack-duration (dim=1)
-			uint32_t *     id = m->id     + i * 1; //Tracker id (dim=1)		
+			uint32_t *     id = m->id     + i * 1; //Tracker id (dim=1)
+			if (u [0] > MOTP_RELEASE) {continue;}
 			float zx0 [2];
 			vf32_sub (2, zx0, z0, x0);
 			float l = vf32_norm2 (2, zx0);
@@ -312,7 +324,7 @@ void motp_release (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 				if (kp [j].class_id != -1) {continue;}
 				float * z0 = (float *) &kp [j].pt;
 				//The tracker can not jump to the keypoint (z) if other trackers are in proximity.
-				if (motp_shortest (m, z0) < MOTP_SEARCHR2_MAX) {continue;}
+				if (motp_shortest (m, z0) < MOTP_RELEASE_PROXIMITY) {continue;}
 				//Now the tracker is free to take this keypoint.
 				//The tracker is moved to the keypoint.
 				//The tracker is reset.
@@ -325,6 +337,7 @@ void motp_release (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 				kp [j].class_id = m->id_counter;
 				id [0]          = m->id_counter;
 				m->id_counter ++;
+				//TRACE_F ("%u %u", i, id [0]);
 			}
 		}
 		
@@ -363,4 +376,72 @@ void motp_expand (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 	}
 }
 
+
+struct MOTP_Files
+{
+	FILE * x0;
+	FILE * x1;
+	FILE * x2;
+	FILE * d;
+	FILE * r;
+	FILE * t;
+	FILE * u;
+	FILE * id;
+};
+
+
+void motp_openfiles (struct MOTP_Files * m, const char * name)
+{
+	char filename [100];
+	snprintf (filename, 100, "%s%s", name, "_x0.txt");
+	m->x0 = fopen (filename, "w+");
+	snprintf (filename, 100, "%s%s", name, "_x1.txt");
+	m->x1 = fopen (filename, "w+");
+	snprintf (filename, 100, "%s%s", name, "_x2.txt");
+	m->x2 = fopen (filename, "w+");
+	snprintf (filename, 100, "%s%s", name, "_d.txt");
+	m->d = fopen (filename, "w+");
+	snprintf (filename, 100, "%s%s", name, "_r.txt");
+	m->r = fopen (filename, "w+");
+	snprintf (filename, 100, "%s%s", name, "_t.txt");
+	m->t = fopen (filename, "w+");
+	snprintf (filename, 100, "%s%s", name, "_u.txt");
+	m->u = fopen (filename, "w+");
+	snprintf (filename, 100, "%s%s", name, "_id.txt");
+	m->id = fopen (filename, "w+");
+	ASSERT (m->x0);
+	ASSERT (m->x1);
+	ASSERT (m->x2);
+	ASSERT (m->d);
+	ASSERT (m->r);
+	ASSERT (m->t);
+	ASSERT (m->u);
+	ASSERT (m->id);
+}
+
+
+void motp_writefiles (struct MOTP_Files * f, struct MOTP * m)
+{
+	uint32_t i = m->cap;
+	while (i--)
+	{
+		float    *     x0 = m->x0     + i * 2; //Tracker position
+		float    *     x1 = m->x1     + i * 2; //Tracker velocity
+		float    *     x2 = m->x2     + i * 2; //Tracker acceleration
+		float    *      d = m->d      + i * 2; //TrackerKeypoint distance
+		float    *      r = m->r      + i * 1; //Tracker search-radius
+		uint32_t *      t = m->t      + i * 1; //Tracker track-duration.
+		uint32_t *      u = m->u      + i * 1; //Tracker track-duration.
+		uint32_t *     id = m->id     + i * 1; //Tracker track-duration.
+		if (u [0] >= MOTP_RELEASE) {continue;}
+		fprintf (f->x0, "%f %f\n", x0 [0], x0 [1]);
+		fprintf (f->x1, "%f %f\n", x1 [0], x1 [1]);
+		fprintf (f->x2, "%f %f\n", x2 [0], x2 [1]);
+		fprintf (f->d, "%f %f\n", d [0], d [1]);
+		fprintf (f->r, "%f\n", r [0]);
+		fprintf (f->t, "%u\n", t [0]);
+		fprintf (f->u, "%u\n", u [0]);
+		fprintf (f->id, "%u\n", id [0]);
+	}
+}
 
