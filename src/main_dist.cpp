@@ -14,9 +14,10 @@
 #include <csc/v2.h> //Vector operations.
 
 //Application
-#include "objtrack.h"
 #include "option.h"
 #include "motp.h"
+
+#define QUIT 0x0001
 
 
 
@@ -58,17 +59,11 @@ int main (int argc, char** argv)
 	ASSERT (SDL_CreateWindowAndRenderer (w, h, SDL_WINDOW_RESIZABLE, &window, &renderer) == 0);
 	SDL_Event event;
 	uint32_t flags = 0;
-	cv::Mat f0 (h, w, CV_8UC3);
-	SDL_Texture * texture = SDLCV_CreateTexture (renderer, f0);
-
-	
+	cv::Mat mat0 (h, w, CV_8UC3);
+	SDL_Texture * texture = SDLCV_CreateTexture (renderer, mat0);
 	float z [2*4] = {300.0f, 300.0f, 350.0f, 300.0f, 600.0f, 200.0f, 600.0f, 400.0f};
 	float x [2] = {10.0f, 10.0f};
 	float y [2];
-	
-
-	
-
 	while (1)
 	{
 		while (SDL_PollEvent (&event))
@@ -95,19 +90,17 @@ int main (int argc, char** argv)
 					SDL_GetWindowSize (window, &w, &h);
 					if (event.button.button == SDL_BUTTON_LEFT)
 					{
-						x [0] = (event.motion.x * f0.cols) / w;
-						x [1] = (event.motion.y * f0.rows) / h;
+						x [0] = (event.motion.x * mat0.cols) / w;
+						x [1] = (event.motion.y * mat0.rows) / h;
 						dist (y, x, 4, z);
 						//f0.setTo (0);
-						cv::drawMarker (f0, cv::Point2f (z[0], z [1]), cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 8, 2);
-						cv::drawMarker (f0, cv::Point2f (z[2], z [3]), cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 8, 2);
-						cv::drawMarker (f0, cv::Point2f (z[4], z [5]), cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 8, 2);
-						cv::drawMarker (f0, cv::Point2f (z[6], z [7]), cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 8, 2);
-						cv::drawMarker (f0, cv::Point2f (x[0], x [1]), cv::Scalar (255, 255, 0), cv::MARKER_CROSS, 8, 2);
-						cv::drawMarker (f0, cv::Point2f (x[0], x [1]) + cv::Point2f (y[0], y [1]), cv::Scalar (0, 255, 255), cv::MARKER_CROSS, 4, 1);
-						cv::arrowedLine (f0, cv::Point2f (x[0], x [1]), cv::Point2f (x[0], x [1]) + cv::Point2f (y[0], y [1]), cv::Scalar (0, 0, 255), 1, 8, 0, 0.1);
-						
-		
+						cv::drawMarker (mat0, cv::Point2f (z[0], z [1]), cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 8, 2);
+						cv::drawMarker (mat0, cv::Point2f (z[2], z [3]), cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 8, 2);
+						cv::drawMarker (mat0, cv::Point2f (z[4], z [5]), cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 8, 2);
+						cv::drawMarker (mat0, cv::Point2f (z[6], z [7]), cv::Scalar (255, 0, 255), cv::MARKER_CROSS, 8, 2);
+						cv::drawMarker (mat0, cv::Point2f (x[0], x [1]), cv::Scalar (255, 255, 0), cv::MARKER_CROSS, 8, 2);
+						cv::drawMarker (mat0, cv::Point2f (x[0], x [1]) + cv::Point2f (y[0], y [1]), cv::Scalar (0, 255, 255), cv::MARKER_CROSS, 4, 1);
+						cv::arrowedLine (mat0, cv::Point2f (x[0], x [1]), cv::Point2f (x[0], x [1]) + cv::Point2f (y[0], y [1]), cv::Scalar (0, 0, 255), 1, 8, 0, 0.1);
 					}
 				}
 				break;
@@ -119,16 +112,8 @@ int main (int argc, char** argv)
 				break;
 			}	
 		}
-		
-		
-		
-
-		
-
 		if (flags & QUIT) {break;}
-		if (flags & PAUSE) {continue;}
-		
-		SDLCV_CopyTexture (texture, f0);
+		SDLCV_CopyTexture (texture, mat0);
 		SDL_RenderClear (renderer);
 		SDL_RenderCopy (renderer, texture, NULL, NULL);
 		SDL_RenderPresent (renderer);

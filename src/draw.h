@@ -80,7 +80,8 @@ void draw_trace
 		if (u [0] < MOTP_RELEASE && t [0] > 4)
 		{
 			srand (id [0]);
-			cv::Scalar color (rand () & 255, rand () & 255, rand () & 255);
+			uint32_t r = RAND_MAX / 255;
+			cv::Scalar color (rand () / r, rand () / r, rand () / r);
 			cv::Point2f a (xa [0], xa [1]);
 			cv::Point2f b (xb [0], xb [1]);
 			int thickness = 1;

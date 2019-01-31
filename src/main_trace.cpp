@@ -18,13 +18,9 @@
 #include "motp.h"
 #include "draw.h"
 
-
-
 #define QUIT     0x0001
 #define UPDATE   0x0002
 #define SEMIAUTO 0x0004
-
-
 
 
 
@@ -40,23 +36,31 @@ int main (int argc, char** argv)
 	
 	// Position of frame 
 	//cap.set (cv::CAP_PROP_POS_FRAMES, (2*60*60+35*60 +10)*20);
-	cap.set (cv::CAP_PROP_POS_FRAMES, (5*60*60+48*60 + 30)*20);
+	//cap.set (cv::CAP_PROP_POS_FRAMES, (5*60*60+48*60 + 30)*20);
 	//cap.set (cv::CAP_PROP_POS_FRAMES, (12*60*60+25*60)*20);
 	//Duration 5 or 10 minutes
 	double w = cap.get (cv::CAP_PROP_FRAME_WIDTH);
 	double h = cap.get (cv::CAP_PROP_FRAME_HEIGHT);
 	
-	cv::Mat f0 (h, w, CV_8UC3);
-	cv::Mat f1 (h, w, CV_8UC3);
-	cv::Mat f2 (h, w, CV_8UC3);
-	cv::Mat f3 (h, w, CV_8UC3, cv::Scalar (0,0,0));
-	cv::Mat mask (h, w, CV_8UC1);
+	cv::Mat mat_src      (h, w, CV_8UC3, cv::Scalar (0,0,0));
+	cv::Mat mat_filtered (h, w, CV_8UC3, cv::Scalar (0,0,0));
+	cv::Mat mat_trace    (h, w, CV_8UC3, cv::Scalar (0,0,0));
+	cv::Mat mat_mask     (h, w, CV_8UC1);
 	
 	cv::Ptr<cv::BackgroundSubtractorKNN> bgfs;
 	bgfs = cv::createBackgroundSubtractorKNN ();
 	bgfs->setHistory (100);
 	bgfs->setDist2Threshold (2000.0);
 	bgfs->setDetectShadows (false);
+	
+	int morph_elem = cv::MorphShapes::MORPH_ELLIPSE;
+	int morph_size = 4;
+	cv::Mat element = cv::getStructuringElement 
+	(
+		morph_elem, 
+		cv::Size (2*morph_size + 1, 2*morph_size+1), 
+		cv::Point (morph_size, morph_size)
+	);
 	
 	cv::Ptr<cv::SimpleBlobDetector> blobber;
 	std::vector <cv::KeyPoint> kp;
@@ -83,26 +87,23 @@ int main (int argc, char** argv)
 	}
 	
 	
-	int morph_elem = cv::MorphShapes::MORPH_ELLIPSE;
-	int morph_size = 4;
-	cv::Mat element = cv::getStructuringElement (morph_elem, cv::Size (2*morph_size + 1, 2*morph_size+1), cv::Point (morph_size, morph_size));
-	
+
 	ASSERT (SDL_Init (SDL_INIT_EVERYTHING) == 0);
 	SDL_Window * window = NULL;
 	SDL_Renderer * renderer = NULL;
-	ASSERT (SDL_CreateWindowAndRenderer (800, 600, SDL_WINDOW_RESIZABLE, &window, &renderer) == 0);
+	ASSERT (SDL_CreateWindowAndRenderer (w, h, SDL_WINDOW_RESIZABLE, &window, &renderer) == 0);
 	
 	uint32_t flags = 0;
-	flags |= cap.read (f0) ? 0 : QUIT;
+	flags |= cap.read (mat_src) ? 0 : QUIT;
 	uint32_t iframe = cap.get (cv::CAP_PROP_POS_FRAMES);
-	SDL_Texture * texture = SDLCV_CreateTexture (renderer, f0);
+	SDL_Texture * texture = SDLCV_CreateTexture (renderer, mat_src);
 	SDL_Event event;
 	
 	
 	struct MOTP m;
 	m.cap = 30;
 	motp_init (&m);
-	v2f32_random_wh (m.cap, m.x0, f0.cols, f0.rows);
+	v2f32_random_wh (m.cap, m.x0, mat_src.cols, mat_src.rows);
 	float * x0 = (float *) malloc (m.cap * sizeof (float) * 2);
 	ASSERT (x0);
 	
@@ -144,14 +145,14 @@ int main (int argc, char** argv)
 		
 		if (flags & UPDATE)
 		{
-			flags |= cap.read (f0) ? 0 : QUIT;
+			flags |= cap.read (mat_src) ? 0 : QUIT;
 			if (flags & QUIT) {break;}
-			//f0.copyTo (f1);
-			cv::morphologyEx (f0, f1, cv::MORPH_GRADIENT, element);
-			bgfs->apply (f1, mask);
-			cv::blur (mask, mask, cv::Size (3, 3));
-			blobber->detect (mask, kp);
-			f0.copyTo (f1);
+			
+			cv::morphologyEx (mat_src, mat_filtered, cv::MORPH_GRADIENT, element);
+			bgfs->apply (mat_filtered, mat_mask);
+			cv::blur (mat_mask, mat_mask, cv::Size (3, 3));
+			blobber->detect (mat_mask, kp);
+	
 			
 			vf32_cpy (m.cap * 2, x0, m.x0);
 			motp_search (&m, kp);
@@ -159,21 +160,20 @@ int main (int argc, char** argv)
 			motp_release (&m, kp);
 			motp_expand (&m, kp);
 			
-			draw_trace (f3, m.cap, m.id, m.t, m.u, x0, m.x0);
-			draw_kp (f1, kp);
-			draw_motp (f1, &m);
-
-			f1 += f3;
-			SDLCV_CopyTexture (texture, f1);
+			draw_trace (mat_trace, m.cap, m.id, m.t, m.u, x0, m.x0);
+			draw_kp (mat_src, kp);
+			draw_motp (mat_src, &m);
+			mat_src += mat_trace;
+			
+			SDLCV_CopyTexture (texture, mat_src);
 			SDL_RenderClear (renderer);
 			SDL_RenderCopy (renderer, texture, NULL, NULL);
-			SDL_RenderPresent (renderer);	
-			f1.setTo (0);
+			SDL_RenderPresent (renderer);
 		}
 		
 		
 		
-		usleep (50000);
+		SDL_Delay (100);
 	}
 	
 	return 0;

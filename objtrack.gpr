@@ -14,9 +14,9 @@ project Objtrack is
 	
 	Main_Files := 
 	(
-		--"objtrack.cpp"
-		--"dist.cpp"
-		--"main_trace.cpp"
+		"main_mouse.cpp",
+		"main_dist.cpp",
+		"main_trace.cpp",
 		"main_tofiles.cpp"
 	);
 	
