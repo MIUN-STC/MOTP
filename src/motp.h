@@ -14,13 +14,14 @@
 //Release the tracker after this many untrack steps.
 #define MOTP_RELEASE 20
 
+//How close a new tracker can start to all other trackers.
+#define MOTP_RELEASE_PROXIMITY (50.0f*50.0f)
+
 //Can merge with others after this many track steps.
 #define MOTP_MERGE 200
 
 //The maximum search radius
 #define MOTP_SEARCHR2_MAX (100.0f*100.0f)
-
-#define MOTP_RELEASE_PROXIMITY (50.0f*50.0f)
 
 //The search radius growrate when no keypoints are found.
 #define MOTP_SEARCHR2_GROWRATE_OFFSET (10.0f*10.0f)
