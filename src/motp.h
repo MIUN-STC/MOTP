@@ -220,7 +220,7 @@ void motp_update (struct MOTP * m)
 		//Finaly update the position.
 		v2f32_add (x0, x0, x1mix);
 	}
-	//Here we can choose to slow down the velocity.
+	//Here we can choose the amount of slowdown.
 	vf32_mus (m->cap*2, m->x1, m->x1, MOTP_VELREDUCE);
 }
 
@@ -435,11 +435,11 @@ void motp_writefiles (struct MOTP_Files * f, struct MOTP * m)
 		uint32_t *      u = m->u      + i * 1; //Tracker track-duration.
 		uint32_t *     id = m->id     + i * 1; //Tracker track-duration.
 		if (u [0] >= MOTP_RELEASE) {continue;}
-		fprintf (f->x0, "%f %f\n", x0 [0], x0 [1]);
-		fprintf (f->x1, "%f %f\n", x1 [0], x1 [1]);
-		fprintf (f->x2, "%f %f\n", x2 [0], x2 [1]);
-		fprintf (f->d, "%f %f\n", d [0], d [1]);
-		fprintf (f->r, "%f\n", r [0]);
+		fprintf (f->x0, "%e %e\n", x0 [0], x0 [1]);
+		fprintf (f->x1, "%e %e\n", x1 [0], x1 [1]);
+		fprintf (f->x2, "%e %e\n", x2 [0], x2 [1]);
+		fprintf (f->d, "%e %e\n", d [0], d [1]);
+		fprintf (f->r, "%e\n", r [0]);
 		fprintf (f->t, "%u\n", t [0]);
 		fprintf (f->u, "%u\n", u [0]);
 		fprintf (f->id, "%u\n", id [0]);
