@@ -57,6 +57,10 @@
 
 
 //Multiple Object Tracker Particle (MOTP)
+//The tracker has 3 states. (tracking, not tracking, released);
+// * Tracking     when u = 0
+// * Not tracking when u > 0 and u < MOTP_RELEASE
+// * Released     when u >= MOTP_RELEASE
 struct MOTP
 {
 	uint32_t id_counter;
@@ -125,6 +129,8 @@ void motp_update (struct MOTP * m)
 		//to catchup a fast moving keypoints by using tracking time (t).
 		ASSERT (t [0] > 0);
 		ASSERT (MOTP_MASS > 0);
+		//Not sure about timeboost having T/(t+u) or T/(t^2) or T/(t+u)^2?
+		//The important thing is that the tracker has higher acceleration at start.
 		float k = (1.0f / MOTP_MASS) + (MOTP_TIMEBOOST / (t [0] + u [0]));
 		v2f32_mus (x2, d, k);
 		v2f32_add (x1, x1, x2);
@@ -132,13 +138,15 @@ void motp_update (struct MOTP * m)
 		//Reduce tracker oscillation and orbitation around a keypoints.
 		//Velocity (x1mix) is mix of 
 		//history velocity (x1) and realtime average distance TrackerKeypoint (d)
+		//x1mix := k * x1 + (1 - k) * d
 		float x1mix [2];
 		vf32_weight_ab (2, x1mix, x1, d, MOTP_VELDELTA_MIX);
 		
 		//Finaly update the position.
 		v2f32_add (x0, x0, x1mix);
 	}
-	//Here we can choose the amount of slowdown.
+	//Slow down the tracker.
+	//This making sure that the tracker does not go too far away from the last seen keypoint.
 	vf32_mus (m->cap*2, m->x1, m->x1, MOTP_VELREDUCE);
 }
 
@@ -239,20 +247,21 @@ void motp_release (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 			uint32_t j = kp.size ();
 			while (j--)
 			{
-				//The tracker can not jump to the keypoint (z) if it belong to another tracker.
+				//The tracker can not jump to the keypoint (z) if its belonging to another tracker.
 				if (kp [j].class_id != -1) {continue;}
 				float * z0 = (float *) &kp [j].pt;
-				//The tracker can not jump to the keypoint (z) if other trackers are in proximity.
+				//The tracker can not jump to the keypoint (z) if other trackers are in proximity of (z).
 				if (motp_shortest (m, z0) < MOTP_RELEASE_PROXIMITY) {continue;}
 				//Now the tracker is free to take this keypoint.
 				//The tracker is moved to the keypoint.
-				//The tracker is reset.
+				//The tracker's history is reset.
 				vf32_cpy (2, x0, z0);
 				vu32_set1 (1, u, 0);
 				vf32_set1 (2, x1, 0.0f);
 				vf32_set1 (1, r, MOTP_SEARCHR2_START);
 				vu32_set1 (1, t, 1);
 				//Generate a new id for the tracker
+				//The old id will never be used again.
 				kp [j].class_id = m->id_counter;
 				id [0]          = m->id_counter;
 				m->id_counter ++;
@@ -278,6 +287,7 @@ void motp_expand (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 		float    *      r = m->r      + i * 1; //Tracker search-radius
 		uint32_t *      t = m->t      + i * 1; //Tracker track-duration.
 		uint32_t *      u = m->u      + i * 1; //Tracker track-duration.
+		//Check if tracker is not tracking.
 		if (u [0] > 0)
 		{
 			r [0] += MOTP_SEARCHR2_GROWRATE_OFFSET;
@@ -285,6 +295,7 @@ void motp_expand (struct MOTP * m, std::vector <cv::KeyPoint> & kp)
 			r [0] += MOTP_SEARCHR2_GROWRATE_TIMEBOOST / t [0];
 			r [0] = MIN (r [0], MOTP_SEARCHR2_MAX);
 		}
+		//Check if the tracker is tracking.
 		else if (u [0] == 0)
 		{
 			r [0] = MOTP_SEARCHR2_OFFSET;

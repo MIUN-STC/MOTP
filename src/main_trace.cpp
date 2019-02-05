@@ -37,7 +37,7 @@ int main (int argc, char** argv)
 	// Position of frame 
 	//cap.set (cv::CAP_PROP_POS_FRAMES, (2*60*60+35*60 +10)*20);
 	//cap.set (cv::CAP_PROP_POS_FRAMES, (5*60*60+48*60 + 30)*20);
-	//cap.set (cv::CAP_PROP_POS_FRAMES, (12*60*60+25*60)*20);
+	cap.set (cv::CAP_PROP_POS_FRAMES, (12*60*60+25*60)*20);
 	//Duration 5 or 10 minutes
 	double w = cap.get (cv::CAP_PROP_FRAME_WIDTH);
 	double h = cap.get (cv::CAP_PROP_FRAME_HEIGHT);
@@ -173,7 +173,7 @@ int main (int argc, char** argv)
 		
 		
 		
-		SDL_Delay (100);
+		SDL_Delay (1);
 	}
 	
 	return 0;
